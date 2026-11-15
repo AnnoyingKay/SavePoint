@@ -345,7 +345,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAut
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 /* ===================== CONFIG ===================== */
-const APP_VERSION = 4;
+const APP_VERSION = 5;
 
 /* PASTE: copy the same firebaseConfig block from your Musicbox index.html (search for "firebaseConfig"). */
 const FIREBASE_CONFIG = {
@@ -673,7 +673,7 @@ function paintBackdrop() {
 /* ===================== STATE ===================== */
 const S = {
   user: null, tab: ls.get("sp_tab", "library"), theme: ls.get("sp_theme", "crystal"), art: ls.get("sp_art", "1") !== "0", motion: ls.get("sp_motion", matchMedia("(prefers-reduced-motion: reduce)").matches ? "0" : "1") === "1", wi: Math.floor(Math.random() * 6),
-  games: [], members: {}, cfg: {}, owned: {}, rawgKey: ls.get("sp_rawg", ""),
+  games: [], members: {}, cfg: {}, owned: {}, rawgKey: ls.get("sp_rawg", ""), upc: ls.get("sp_upc", ""),
   q: "", sort: ls.get("sp_sort", "recent"),
   f: { platform: "", genre: "", decade: "", publisher: "", sub: "" },
   cpage: 0, add: null, auto: null, versions: new Map(), unsub: [], gotMembers: false
@@ -955,14 +955,15 @@ async function scanSearch(queries, note) {
   if (S.add === a) { const q = $("#addq"); if (q) q.value = a.q; paintResults(); }
 }
 async function barcodeLookup(code) {
+  if (!S.upc) return scanMsg(`Barcode ${code} found, but the barcode helper address is not set. Add it in Settings, or use Photo of cover.`);
   scanMsg(`Barcode ${code} found. Looking it up…`);
   try {
-    const r = await fetch("https://api.upcitemdb.com/prod/trial/lookup?upc=" + encodeURIComponent(code));
+    const r = await fetch(S.upc + (S.upc.includes("?") ? "&" : "?") + "upc=" + encodeURIComponent(code));
     if (!r.ok) throw new Error("upc " + r.status);
     const j = await r.json(), it = j.items && j.items[0], t = it && titleFromUpc(it.title);
     if (!t) return scanMsg(`Barcode ${code} is not in the free database. Try Photo of cover, or type the name.`);
     return scanSearch([t], `Barcode ${code} looks like`);
-  } catch (e) { scanMsg("The free barcode lookup could not be reached, or today's limit is used. Try Photo of cover, or type the name."); }
+  } catch (e) { scanMsg("The barcode helper could not be reached, or the free lookup limit for today is used. Try Photo of cover, or type the name."); }
 }
 async function decodeBarcode(cv) {
   try {
@@ -1159,6 +1160,10 @@ function settingsHtml() {
 <p style="margin-top:12px">Automatic tools only fill empty fields and never change what you edited. Only exact title matches are used.</p>
 <div class="btns"><button type="button" class="btn sm" data-action="auto-covers">Assign covers automatically</button><button type="button" class="btn sm" data-action="auto-match">Match games with RAWG</button><button type="button" class="btn sm ghost" data-action="stop-auto">Stop</button></div>
 <p id="autoStatus" style="margin-top:8px"></p></div>
+<div class="set"><h3>Barcode helper</h3><p>The web address of your free Cloudflare helper (it starts with https://). Needed only for Scan barcode.</p>
+<div class="field"><label for="upcurl">Helper address</label><input id="upcurl" type="url" autocomplete="off" placeholder="https://savepoint-barcode.yourname.workers.dev" value="${esc(S.upc)}"></div>
+<div class="btns"><button type="button" class="btn sm primary" data-action="save-upc">Save address</button><button type="button" class="btn sm" data-action="test-upc">Test</button></div>
+<p id="upcStatus" style="margin-top:8px"></p></div>
 <div class="set"><h3>Backup</h3><p>Saves all games, profile and owned consoles to a file on this device.</p><div class="btns"><button type="button" class="btn sm primary" data-action="export">Export JSON backup</button></div></div>
 <div class="set"><h3>About</h3><p>Game data and images from <a href="https://rawg.io" target="_blank" rel="noopener">RAWG</a>. Add ?debug=1 to the web address to see a tap log.</p></div>`;
 }
@@ -1174,6 +1179,19 @@ function saveKey() {
   S.rawgKey = k; ls.set("sp_rawg", k);
   setDoc(doc(db, "gamesMeta", "household", "config", "main"), { rawgKey: k }, { merge: true }).catch(e => showErr("Save failed: " + e.message));
   setStatus("keyStatus", k ? "Key saved." : "Key removed."); toast("Saved");
+}
+function upcUrl() { let v = (($("#upcurl") || {}).value || "").trim(); if (v && !/^https:\/\//i.test(v)) v = "https://" + v; return v.replace(/\/+$/, ""); }
+function saveUpc() {
+  const v = upcUrl(); S.upc = v; ls.set("sp_upc", v);
+  setDoc(doc(db, "gamesMeta", "household", "config", "main"), { upcProxy: v }, { merge: true }).catch(e => showErr("Save failed: " + e.message));
+  const i = $("#upcurl"); if (i) i.value = v;
+  setStatus("upcStatus", v ? "Address saved." : "Address removed."); toast("Saved");
+}
+async function testUpc() {
+  const v = upcUrl(); if (!v) return setStatus("upcStatus", "Type the helper address first.");
+  setStatus("upcStatus", "Testing…");
+  try { const r = await fetch(v + "?upc=045496590086"); setStatus("upcStatus", r.ok ? "The helper answers. Barcode scanning is ready." : "The helper answered with an error (" + r.status + "). Check the address and the pasted script."); }
+  catch (e) { setStatus("upcStatus", "Could not reach it. Check the address, and that the script was deployed."); }
 }
 async function autoMatch(mode) {
   if (S.auto && S.auto.run) return setStatus("autoStatus", "Already running.");
@@ -1256,6 +1274,7 @@ function startListeners() {
   S.unsub.push(onSnapshot(doc(db, "gamesMeta", "household", "config", "main"), snap => {
     const d = snap.exists() ? snap.data() : {}; S.cfg = d;
     if (d.rawgKey) { S.rawgKey = d.rawgKey; ls.set("sp_rawg", d.rawgKey); }
+    if (d.upcProxy) { S.upc = d.upcProxy; ls.set("sp_upc", d.upcProxy); }
   }, fsError));
   S.unsub.push(onSnapshot(doc(db, "gamesMeta", "household", "config", "consoles"), snap => {
     S.owned = (snap.exists() && snap.data().owned) || {};
@@ -1338,6 +1357,8 @@ function act(name, el) {
     case "toggle-art": S.art = !S.art; ls.set("sp_art", S.art ? "1" : "0"); paintBackdrop(); return renderView();
     case "toggle-motion": S.motion = !S.motion; ls.set("sp_motion", S.motion ? "1" : "0"); paintBackdrop(); return renderView();
     case "save-key": return saveKey();
+    case "save-upc": return saveUpc();
+    case "test-upc": return testUpc();
     case "test-key": return testKey();
     case "auto-covers": return autoMatch("covers");
     case "auto-match": return autoMatch("match");
