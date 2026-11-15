@@ -1,0 +1,1053 @@
+<!doctype html>
+<html lang="en" data-tab="library">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SavePoint</title>
+<meta name="theme-color" content="#0d1030">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SavePoint">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png" type="image/png">
+<style>
+:root{--bg:#0d1030;--surface:#171b4a;--surface2:#20266a;--text:#eef1ff;--muted:#9aa3d9;--accent:#7fd4ff;--accent2:#b388ff;--onacc:#07102a;--border:#ffffff24;--r:14px;--nav:64px}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
+body.noscroll{overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+h1,h2,h3,p{margin:0}
+a{color:var(--accent)}
+
+/* error bar + debug */
+#errbar{position:fixed;top:0;left:0;right:0;z-index:99999;background:#c62828;color:#fff;padding:calc(8px + env(safe-area-inset-top)) 12px 8px;display:flex;gap:8px;align-items:flex-start;font:13px/1.35 system-ui,sans-serif}
+#errtxt{flex:1;word-break:break-word}
+#errbar button{background:#ffffff33;color:#fff;border-radius:8px;padding:4px 10px;font-size:13px}
+#dbg{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));z-index:99998;max-height:26dvh;opacity:.94;background:#000d;color:#9f9;font:11px/1.3 ui-monospace,Menlo,monospace;display:flex;flex-direction:column}
+@media(min-width:1100px){#dbg{bottom:0;left:220px}}
+#dbg .bar{display:flex;gap:6px;padding:4px 6px;background:#222;color:#fff}
+#dbg .bar button{background:#444;color:#fff;border-radius:6px;padding:2px 8px;font-size:11px}
+#dbg pre{margin:0;padding:4px 6px;overflow:auto;white-space:pre-wrap;word-break:break-all;flex:1}
+
+/* shell */
+#app{min-height:100dvh;display:flex}
+main{flex:1;min-width:0;padding-bottom:calc(var(--nav) + 24px + env(safe-area-inset-bottom))}
+.side{display:none}
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom)}
+.navbtn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:var(--nav);color:var(--muted);font-size:11px}
+.navbtn svg{width:24px;height:24px}
+.navbtn.on{color:var(--accent)}
+.wrap{max-width:1200px;margin:0 auto;padding:12px 14px}
+.topbar{position:sticky;top:0;z-index:20;background:var(--bg);padding:calc(8px + env(safe-area-inset-top)) 14px 8px;border-bottom:1px solid var(--border)}
+.topin{max-width:1200px;margin:0 auto}
+.toprow{display:flex;align-items:center;gap:10px}
+.brand{font-weight:700;font-size:18px;display:flex;align-items:center;gap:8px;flex:1}
+.brand svg{width:22px;height:22px}
+.toptab{color:var(--muted);font-size:14px}
+.searchrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.searchrow input{flex:1 1 100%}
+.searchrow .tbtn{flex:1;padding:8px 10px}
+@media(min-width:700px){.searchrow{flex-wrap:nowrap}.searchrow input{flex:1 1 auto}.searchrow .tbtn{flex:none;padding:0 12px}}
+html:not([data-tab=library]) .searchrow{display:none}
+.searchrow input{min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;outline:none}
+.searchrow input:focus,.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+.tbtn{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0 12px;font-size:14px;white-space:nowrap}
+.tbtn b{background:var(--accent);color:var(--onacc);border-radius:10px;padding:0 6px;margin-left:4px;font-size:12px}
+
+@media(min-width:1100px){
+ .bottom{display:none}
+ .side{display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100dvh;width:220px;flex:none;background:var(--surface);border-right:1px solid var(--border);padding:20px 12px}
+ .side .sbrand{font-weight:700;font-size:20px;display:flex;align-items:center;gap:8px;padding:0 8px 16px}
+ .side .sbrand svg{width:26px;height:26px}
+ .side .navbtn{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;height:44px;padding:0 12px;border-radius:12px;font-size:15px}
+ .side .navbtn.on{background:var(--surface2)}
+ main{padding-bottom:40px}
+}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 16px;font-weight:600}
+.btn.primary{background:var(--accent);color:var(--onacc);border-color:transparent}
+.btn.danger{background:#c62828;color:#fff;border-color:transparent}
+.btn.ghost{background:transparent}
+.btn.sm{padding:6px 12px;font-size:14px}
+.btn[disabled]{opacity:.5}
+.fab{position:fixed;right:16px;bottom:calc(var(--nav) + 16px + env(safe-area-inset-bottom));z-index:25;width:56px;height:56px;border-radius:50%;background:var(--accent);color:var(--onacc);font-size:32px;line-height:1;box-shadow:0 4px 14px #0008;display:grid;place-items:center}
+html:not([data-tab=library]) .fab{display:none}
+@media(min-width:1100px){.fab{bottom:28px;right:28px}}
+
+/* hero */
+.hero{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,var(--surface2),var(--surface));border:1px solid var(--border);border-radius:20px;padding:16px;margin-bottom:12px}
+.hsym{flex:none;width:56px;height:56px;border-radius:16px;background:var(--accent);color:var(--onacc);display:grid;place-items:center;font-size:28px}
+.hero h1{font-size:20px}
+.hero .tagline{color:var(--muted);font-size:14px}
+.hero .greet{margin-top:4px;font-weight:600;color:var(--accent)}
+.hstats{margin-left:auto;text-align:right;color:var(--muted);font-size:13px;white-space:nowrap}
+.hstats b{display:block;font-size:22px;color:var(--text)}
+@media(max-width:520px){.hstats{display:none}}
+
+.resbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 10px;color:var(--muted);font-size:14px}
+.fchip{background:var(--surface2);border-radius:999px;padding:3px 6px 3px 12px;font-size:13px;color:var(--text)}
+.fchip button{color:var(--muted);padding:0 6px;font-size:14px}
+
+/* game cards */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media(min-width:640px){.grid{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:820px){.grid{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:1100px){.grid{grid-template-columns:repeat(5,1fr)}}
+@media(min-width:1400px){.grid{grid-template-columns:repeat(6,1fr)}}
+.card{display:flex;flex-direction:column;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.cover{aspect-ratio:16/10;background:var(--surface2);position:relative;overflow:hidden}
+.cover img,.ph{width:100%;height:100%;object-fit:cover;display:block}
+.ph{display:grid;place-items:center;font-weight:800;font-size:28px;color:#ffffffcc;letter-spacing:1px}
+.cmeta{padding:8px 10px 10px;display:flex;flex-direction:column;gap:4px}
+.ctitle{font-weight:600;font-size:14px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.crow{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.chip{background:var(--c,#555);color:#fff;border-radius:6px;padding:1px 6px;font-weight:600;font-size:11px;text-shadow:0 1px 2px #0006}
+.tags{display:flex;flex-wrap:wrap;gap:4px}
+.tag{background:var(--surface2);color:var(--accent);border-radius:6px;padding:1px 6px;font-size:11px;font-weight:600}
+.tag.sub{color:var(--accent2)}
+.empty{text-align:center;color:var(--muted);padding:40px 10px;grid-column:1/-1}
+
+/* sheets */
+.sheet-back{position:fixed;inset:0;z-index:60;background:#000a;display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:640px;max-height:92dvh;background:var(--bg);border:1px solid var(--border);border-radius:20px 20px 0 0;display:flex;flex-direction:column;overflow:hidden}
+@media(min-width:700px){.sheet-back{align-items:center}.sheet{border-radius:20px;max-height:88dvh}}
+.sheet-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--surface);border-bottom:1px solid var(--border)}
+.sheet-head h2{flex:1;font-size:18px}
+.x{width:36px;height:36px;border-radius:50%;background:var(--surface2);font-size:16px}
+.sheet-body{overflow:auto;padding:14px;flex:1;-webkit-overflow-scrolling:touch}
+.sheet-foot{padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.sheet-foot:empty{display:none}
+.sheet-foot .btn{flex:1}
+.seg{display:flex;background:var(--surface);border-radius:12px;padding:3px;margin-bottom:12px}
+.seg button{flex:1;padding:8px;border-radius:10px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--accent);color:var(--onacc)}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-size:13px;color:var(--muted)}
+.field input,.field select,.field textarea{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;outline:none;width:100%;color:var(--text)}
+.field select option,.field select optgroup{background:var(--surface);color:var(--text)}
+.field textarea{min-height:70px;resize:vertical}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.check{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.check input{width:20px;height:20px;accent-color:var(--accent)}
+.msg{border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:14px;background:var(--surface2)}
+.msg.warn{background:#6d4c00;color:#ffe9b0}
+.msg.bad{background:#7f1d1d;color:#ffd6d6}
+.res{display:flex;gap:10px;align-items:center;text-align:left;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px;margin-bottom:8px}
+.res .thumb{width:72px;height:50px;border-radius:8px;overflow:hidden;flex:none;background:var(--surface2)}
+.res .thumb img{width:100%;height:100%;object-fit:cover}
+.res b{display:block;font-size:15px}
+.res span{font-size:12px;color:var(--muted)}
+.attr{font-size:12px;color:var(--muted);text-align:center;margin-top:10px}
+.big{width:100%;aspect-ratio:16/9;border-radius:14px;overflow:hidden;margin-bottom:12px;background:var(--surface2)}
+.big img,.big .ph{width:100%;height:100%;object-fit:cover}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:6px 10px;font-size:14px;margin-bottom:12px}
+.kv dt{color:var(--muted)}.kv dd{margin:0}
+.opt{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;padding:12px;border-radius:12px;background:var(--surface);margin-bottom:6px;border:1px solid var(--border)}
+.opt.on{border-color:var(--accent);color:var(--accent)}
+.gname{font-size:13px;color:var(--muted);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.5px}
+.themes{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.th{display:flex;align-items:center;gap:10px;text-align:left;padding:10px;border-radius:12px;border:2px solid var(--border);background:var(--surface)}
+.th.on{border-color:var(--accent)}
+.sw{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:18px;flex:none}
+.th b{display:block;font-size:14px}.th small{color:var(--muted);font-size:11px}
+
+/* toast */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav) + 24px + env(safe-area-inset-bottom));z-index:80;background:var(--text);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;box-shadow:0 4px 14px #0008;max-width:90vw}
+
+/* household */
+.people{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:760px){.people{grid-template-columns:1fr 1fr}}
+.pcard{border-radius:20px;padding:16px;background:linear-gradient(135deg,var(--p2),var(--p1));color:var(--pt);border:1px solid #ffffff30}
+.phead{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+.av{width:52px;height:52px;border-radius:16px;background:var(--pa);color:var(--po);display:grid;place-items:center;font-size:26px;flex:none}
+.pname{font-size:20px;font-weight:700}
+.psub{font-size:13px;opacity:.75}
+.pstats{display:flex;gap:16px;margin-bottom:12px;font-size:13px;opacity:.85}
+.pstats b{display:block;font-size:20px}
+.favs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.fav{border-radius:10px;overflow:hidden;background:#0004;text-align:center;font-size:11px}
+.fav .cover{aspect-ratio:1}
+.fav div.t{padding:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.favnone{opacity:.7;font-size:13px;margin-bottom:12px}
+
+/* consoles */
+.sect{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px}
+.ctiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media(min-width:640px){.ctiles{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:1100px){.ctiles{grid-template-columns:repeat(6,1fr)}}
+.ctile{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:10px 6px 8px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
+.ctile.own{border-color:var(--c);box-shadow:0 0 0 1px var(--c) inset}
+.ctile svg{width:48px;height:48px}
+.ctile:not(.own) svg{filter:grayscale(1);opacity:.35}
+.ctile .nm{font-size:13px;font-weight:600;line-height:1.2}
+.ctile .ct{font-size:12px;color:var(--muted)}
+.ctile .own-btn{font-size:11px;padding:3px 8px;border-radius:999px;background:var(--surface2);color:var(--muted);margin-top:2px}
+.ctile.own .own-btn{background:var(--c);color:#fff}
+.albhead{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.albhead svg{width:44px;height:44px}
+.albhead h2{font-size:20px}
+.albhead .sub{color:var(--muted);font-size:14px}
+.back{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px 12px;font-weight:600}
+.album{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:14px}
+@media(min-width:700px){.album{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:1100px){.album{grid-template-columns:repeat(6,1fr)}}
+.slot{aspect-ratio:1/1.25;border:2px dashed var(--border);border-radius:12px;display:grid;place-items:center;color:var(--muted);font-size:28px;background:#ffffff08}
+.sticker{position:relative;aspect-ratio:1/1.25;background:#fff;border-radius:12px;padding:5px;box-shadow:0 2px 6px #0007;transform:rotate(var(--rot,0deg));display:flex;flex-direction:column;text-align:left;color:#111}
+.sticker .img{flex:1;border-radius:8px;overflow:hidden;min-height:0}
+.sticker .img img,.sticker .img .ph{width:100%;height:100%;object-fit:cover}
+.sticker .cap{font-size:11px;line-height:1.2;padding:4px 2px 1px;font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sticker .by{position:absolute;right:-4px;top:-4px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:var(--onacc);font-size:11px;font-weight:700;display:grid;place-items:center;border:2px solid #fff}
+.pager{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:14px}
+.pager span{color:var(--muted)}
+
+/* settings */
+.set{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:14px}
+.set h3{font-size:16px;margin-bottom:8px}
+.set p{color:var(--muted);font-size:14px;margin-bottom:10px}
+.set .btns{display:flex;flex-wrap:wrap;gap:8px}
+.ver{font-weight:700;font-size:18px}
+
+/* sign in */
+.login{margin:auto;text-align:center;padding:30px 20px;max-width:360px}
+.login svg{width:90px;height:90px;margin-bottom:10px}
+.login h1{font-size:28px;margin-bottom:4px}
+.login p{color:var(--muted);margin-bottom:20px}
+.setupbox{max-width:560px;margin:auto;padding:24px 18px;line-height:1.5}
+.setupbox code{background:var(--surface2);padding:1px 6px;border-radius:6px}
+.foot{text-align:center;color:var(--muted);font-size:12px;padding:20px 10px}
+
+/* console stickers */
+.sticker.cs .img{display:grid;place-items:center;padding:12%}
+.sticker.cs .img svg{width:100%;height:100%}
+.slot.cs{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:8px;font-size:11px;line-height:1.2;text-align:center;color:var(--muted)}
+.slot.cs svg{width:55%;filter:grayscale(1);opacity:.3}
+.slot.blank{border-style:dotted;opacity:.4}
+
+</style>
+</head>
+<body>
+<script>
+/* Red error bar + optional ?debug=1 tap logger. Runs before the app so even load failures show. */
+(function(){
+  var bar=null,msgs=[];
+  function show(m){
+    msgs.push(String(m));
+    if(msgs.length>20)msgs.shift();
+    if(!document.body){document.addEventListener('DOMContentLoaded',function(){show(m)});return}
+    if(!bar){
+      bar=document.createElement('div');bar.id='errbar';bar.setAttribute('role','alert');
+      bar.innerHTML='<span id="errtxt"></span><button type="button" id="errcopy">Copy</button><button type="button" id="errx" aria-label="Dismiss">✕</button>';
+      document.body.appendChild(bar);
+      document.getElementById('errx').onclick=function(){bar.remove();bar=null;msgs=[]};
+      document.getElementById('errcopy').onclick=function(){try{navigator.clipboard.writeText(msgs.join('\n'))}catch(e){}};
+    }
+    document.getElementById('errtxt').textContent='Error: '+msgs[msgs.length-1]+(msgs.length>1?'  (+'+(msgs.length-1)+' more)':'');
+    if(window.__spLog)window.__spLog('ERROR '+m);
+  }
+  window.__spErr=show;
+  window.addEventListener('error',function(e){
+    var t=e.target;
+    if(t&&t!==window&&t.tagName){
+      if(t.tagName==='SCRIPT')show('Could not load app code ('+(t.src||'inline module')+'). Is the network on?');
+      else if(t.tagName==='LINK')show('Could not load '+(t.href||'a file'));
+      return; /* broken images are handled by the app */
+    }
+    show((e.message||'Unknown error')+(e.filename?' ('+e.filename.split('/').pop()+':'+e.lineno+')':''));
+  },true);
+  window.addEventListener('unhandledrejection',function(e){
+    var r=e.reason;show('Promise: '+(r&&r.message?r.message:String(r)));
+  });
+  if(/[?&]debug=1/.test(location.search)){
+    var lines=[],pre,panel;
+    function build(){
+      panel=document.createElement('div');panel.id='dbg';
+      panel.innerHTML='<div class="bar"><b>debug</b><button type="button" data-d="copy">Copy</button><button type="button" data-d="clear">Clear</button><button type="button" data-d="hide">Hide</button></div><pre></pre>';
+      document.body.appendChild(panel);pre=panel.querySelector('pre');
+      panel.addEventListener('click',function(e){
+        var d=e.target.getAttribute&&e.target.getAttribute('data-d');
+        if(d==='clear'){lines=[];pre.textContent=''}
+        if(d==='copy'){try{navigator.clipboard.writeText(lines.join('\n'))}catch(x){}}
+        if(d==='hide'){panel.remove();panel=null}
+        e.stopPropagation();
+      },true);
+    }
+    window.__spLog=function(t){
+      var s=new Date().toISOString().slice(11,23)+' '+t;lines.push(s);if(lines.length>300)lines.shift();
+      if(!document.body)return;
+      if(!panel)return;
+      pre.textContent=lines.join('\n');pre.scrollTop=pre.scrollHeight;
+    };
+    function desc(el){
+      if(!el||!el.tagName)return '?';
+      var s=el.tagName.toLowerCase();
+      if(el.id)s+='#'+el.id;
+      if(el.className&&typeof el.className==='string')s+='.'+el.className.trim().split(/\s+/).slice(0,2).join('.');
+      var a=el.attributes;
+      for(var i=0;i<a.length;i++){if(a[i].name.indexOf('data-')===0)s+='['+a[i].name+'='+a[i].value+']'}
+      var tx=(el.textContent||'').trim().replace(/\s+/g,' ').slice(0,28);
+      return s+(tx?' "'+tx+'"':'');
+    }
+    document.addEventListener('DOMContentLoaded',function(){
+      build();window.__spLog('debug on. UA '+navigator.userAgent.slice(0,80));
+    });
+    ['click','pointerdown'].forEach(function(ev){
+      document.addEventListener(ev,function(e){
+        if(e.target&&e.target.closest&&e.target.closest('#dbg'))return;
+        var t=e.target,c=t.closest?t.closest('button,[data-action],[data-tab],a,input,select,textarea,label'):null;
+        window.__spLog(ev+' '+desc(c||t)+(c&&c!==t?' (hit <'+(t.tagName||'?').toLowerCase()+'>)':'')+' @'+Math.round(e.clientX)+','+Math.round(e.clientY));
+      },true);
+    });
+  }
+})();
+</script>
+<div id="app">
+  <nav class="side" id="sidenav" aria-label="Main"></nav>
+  <main id="main">
+    <header class="topbar" id="topbar" hidden>
+      <div class="topin">
+        <div class="toprow"><div class="brand" id="brand"></div><span class="toptab" id="toptab"></span></div>
+        <div class="searchrow">
+          <input id="q" type="search" placeholder="Search title, platform, genre, publisher" autocomplete="off" enterkeyhint="search">
+          <button type="button" class="tbtn" id="sortBtn" data-action="open-sort">Sort</button>
+          <button type="button" class="tbtn" id="filterBtn" data-action="open-filters">Filters</button>
+        </div>
+      </div>
+    </header>
+    <div class="wrap" id="view"></div>
+    <div class="foot" id="rawgfoot" hidden>Game data and images from <a href="https://rawg.io" target="_blank" rel="noopener">RAWG</a></div>
+  </main>
+  <nav class="bottom" id="bottomnav" aria-label="Main" hidden></nav>
+  <button type="button" class="fab" id="fab" data-action="open-add" aria-label="Add a game" hidden>+</button>
+</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+/* ===================== CONFIG ===================== */
+const APP_VERSION = 2;
+
+/* PASTE: copy the same firebaseConfig block from your Musicbox index.html (search for "firebaseConfig"). */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCgVHwUEbDsp_DiyAWbIaHW7b5LS7MRwNM",
+  authDomain: "shelf-b5282.firebaseapp.com",
+  projectId: "shelf-b5282",
+  storageBucket: "shelf-b5282.appspot.com",
+  messagingSenderId: "137353564152",
+  appId: "1:137353564152:web:5e78fb7a5d32cc5342d00d"
+};
+
+const PEOPLE = {
+  "YNOKHAbSVxUudg94P7O7UjI5rOJ3": "Raul",
+  "vsTUyNLMKpfJh1flUDzvOGynBz23": "Partner"
+};
+const PAGE_SIZE = 12;
+
+/* ===================== HELPERS ===================== */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const ls = {
+  get(k, d = "") { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+const showErr = m => { (window.__spErr || console.error)(m); };
+const log = m => { if (window.__spLog) window.__spLog(m); };
+const initials = t => {
+  const w = String(t || "?").replace(/[^A-Za-z0-9 ]+/g, " ").trim().split(/\s+/).filter(Boolean);
+  return (w.length > 1 ? w.slice(0, 3).map(x => x[0]).join("") : (w[0] || "?").slice(0, 2)).toUpperCase();
+};
+const decadeOf = y => (y ? Math.floor(y / 10) * 10 + "s" : "");
+
+/* ===================== PLATFORMS ===================== */
+const PLATFORMS = [
+  { k: "gb", l: "Game Boy", s: "GB", g: "Nintendo", c: "#8bac0f", t: "handheld" },
+  { k: "gbc", l: "Game Boy Color", s: "GBC", g: "Nintendo", c: "#7e57c2", t: "handheld" },
+  { k: "gba", l: "Game Boy Advance", s: "GBA", g: "Nintendo", c: "#5c6bc0", t: "wide" },
+  { k: "ds", l: "Nintendo DS / DS Lite", s: "DS", g: "Nintendo", c: "#90a4ae", t: "clam" },
+  { k: "3ds", l: "Nintendo 3DS", s: "3DS", g: "Nintendo", c: "#e53935", t: "clam" },
+  { k: "wii", l: "Wii", s: "Wii", g: "Nintendo", c: "#78909c", t: "slab" },
+  { k: "wiiu", l: "Wii U", s: "Wii U", g: "Nintendo", c: "#29b6f6", t: "slab" },
+  { k: "gc", l: "GameCube", s: "GC", g: "Nintendo", c: "#7e57c2", t: "cube" },
+  { k: "switch", l: "Nintendo Switch", s: "Switch", g: "Nintendo", c: "#e53935", t: "tablet" },
+  { k: "switch2", l: "Nintendo Switch 2", s: "Switch 2", g: "Nintendo", c: "#ff5252", t: "tablet" },
+  { k: "ps1", l: "PlayStation", s: "PS1", g: "PlayStation", c: "#9e9e9e", t: "slab" },
+  { k: "ps2", l: "PlayStation 2", s: "PS2", g: "PlayStation", c: "#3949ab", t: "tower" },
+  { k: "ps3", l: "PlayStation 3", s: "PS3", g: "PlayStation", c: "#616161", t: "slab" },
+  { k: "ps4", l: "PlayStation 4", s: "PS4", g: "PlayStation", c: "#1e88e5", t: "slab" },
+  { k: "ps5", l: "PlayStation 5", s: "PS5", g: "PlayStation", c: "#cfd8dc", t: "tower" },
+  { k: "psp", l: "PSP", s: "PSP", g: "PlayStation", c: "#607d8b", t: "wide" },
+  { k: "vita", l: "PS Vita", s: "Vita", g: "PlayStation", c: "#26a69a", t: "wide" },
+  { k: "xbox", l: "Xbox", s: "Xbox", g: "Xbox", c: "#43a047", t: "slab" },
+  { k: "x360", l: "Xbox 360", s: "360", g: "Xbox", c: "#7cb342", t: "slab" },
+  { k: "xone", l: "Xbox One", s: "One", g: "Xbox", c: "#2e7d32", t: "slab" },
+  { k: "xseries", l: "Xbox Series X|S", s: "Series", g: "Xbox", c: "#9e9e9e", t: "tower" },
+  { k: "steam", l: "Steam (PC)", s: "Steam", g: "PC", c: "#4f7fa8", t: "pc" },
+  { k: "pcother", l: "PC (other)", s: "PC", g: "PC", c: "#78909c", t: "pc" },
+  { k: "other", l: "Other", s: "Other", g: "Other", c: "#8d6e63", t: "pad" }
+];
+const PLAT = Object.fromEntries(PLATFORMS.map(p => [p.k, p]));
+const PGROUPS = ["Nintendo", "PlayStation", "Xbox", "PC", "Other"];
+const RAWG_MAP = [
+  [/game boy advance/i, "gba"], [/game boy color/i, "gbc"], [/^game boy$/i, "gb"], [/nintendo ds$|^nintendo dsi/i, "ds"],
+  [/nintendo 3ds/i, "3ds"], [/^wii u/i, "wiiu"], [/^wii$/i, "wii"], [/gamecube/i, "gc"], [/switch 2/i, "switch2"],
+  [/nintendo switch/i, "switch"], [/playstation 5/i, "ps5"], [/playstation 4/i, "ps4"], [/playstation 3/i, "ps3"],
+  [/playstation 2/i, "ps2"], [/^playstation$/i, "ps1"], [/^psp$/i, "psp"], [/ps vita/i, "vita"],
+  [/xbox series/i, "xseries"], [/xbox one/i, "xone"], [/xbox 360/i, "x360"], [/^xbox$/i, "xbox"], [/^pc$/i, "steam"]
+];
+const mapPlat = n => { for (const [re, k] of RAWG_MAP) if (re.test(n)) return k; return null; };
+
+function consoleIcon(type, color) {
+  const c = color, d = "#0006", l = "#fff9";
+  const wrap = x => `<svg viewBox="0 0 48 48" aria-hidden="true">${x}</svg>`;
+  switch (type) {
+    case "handheld": return wrap(`<rect x="12" y="3" width="24" height="42" rx="4" fill="${c}"/><rect x="16" y="7" width="16" height="16" rx="2" fill="${d}"/><path d="M19 33h6M22 30v6" stroke="${l}" stroke-width="3" stroke-linecap="round"/><circle cx="30" cy="32" r="2" fill="${l}"/><circle cx="33" cy="36" r="2" fill="${l}"/>`);
+    case "wide": return wrap(`<rect x="2" y="12" width="44" height="24" rx="8" fill="${c}"/><rect x="14" y="16" width="20" height="16" rx="2" fill="${d}"/><path d="M6 24h6M9 21v6" stroke="${l}" stroke-width="3" stroke-linecap="round"/><circle cx="38" cy="22" r="2" fill="${l}"/><circle cx="41" cy="26" r="2" fill="${l}"/>`);
+    case "clam": return wrap(`<rect x="8" y="3" width="32" height="19" rx="4" fill="${c}"/><rect x="13" y="7" width="22" height="11" rx="2" fill="${d}"/><rect x="8" y="25" width="32" height="20" rx="4" fill="${c}"/><rect x="13" y="29" width="22" height="12" rx="2" fill="${d}"/>`);
+    case "slab": return wrap(`<rect x="4" y="15" width="40" height="18" rx="4" fill="${c}"/><rect x="9" y="20" width="22" height="3" rx="1.5" fill="${d}"/><circle cx="38" cy="24" r="2.5" fill="${l}"/>`);
+    case "tower": return wrap(`<rect x="15" y="3" width="18" height="42" rx="6" fill="${c}"/><rect x="20" y="9" width="8" height="3" rx="1.5" fill="${d}"/><circle cx="24" cy="38" r="2.5" fill="${l}"/>`);
+    case "cube": return wrap(`<path d="M18 11c0-3 12-3 12 0" stroke="${c}" stroke-width="4" fill="none" stroke-linecap="round"/><rect x="7" y="11" width="34" height="28" rx="7" fill="${c}"/><circle cx="24" cy="26" r="6" fill="${d}"/>`);
+    case "tablet": return wrap(`<rect x="2" y="11" width="9" height="26" rx="3" fill="${c}"/><rect x="37" y="11" width="9" height="26" rx="3" fill="${c}"/><rect x="12" y="11" width="24" height="26" rx="2" fill="#222"/><rect x="14" y="13" width="20" height="22" rx="1" fill="${d}"/>`);
+    case "pc": return wrap(`<rect x="5" y="6" width="38" height="26" rx="3" fill="${c}"/><rect x="8" y="9" width="32" height="20" rx="1.5" fill="${d}"/><rect x="20" y="32" width="8" height="6" fill="${c}"/><rect x="13" y="38" width="22" height="4" rx="2" fill="${c}"/>`);
+    default: return wrap(`<rect x="3" y="14" width="42" height="21" rx="10" fill="${c}"/><path d="M12 24.5h8M16 20.5v8" stroke="${l}" stroke-width="3" stroke-linecap="round"/><circle cx="31" cy="23" r="2.3" fill="${l}"/><circle cx="36" cy="27" r="2.3" fill="${l}"/>`);
+  }
+}
+const crystalSvg = () => `<svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="50,4 76,36 50,96 24,36" fill="var(--accent)"/><polygon points="50,4 24,36 50,36" fill="#fff" opacity=".55"/><polygon points="50,4 76,36 50,36" fill="#fff" opacity=".25"/><polygon points="24,36 50,96 50,36" fill="#000" opacity=".18"/><polygon points="76,36 50,96 50,36" fill="var(--accent2)" opacity=".55"/></svg>`;
+
+/* ===================== THEMES (original artwork, no licensed material) ===================== */
+const THEMES = [
+  { id: "crystal", g: "Favourites", name: "Crystal Realm", tag: "Every game, kept safe.", greet: n => `The crystals are glowing, ${n}.`, sym: "◆",
+    c: { bg: "#0d1030", surface: "#171b4a", surface2: "#20266a", text: "#eef1ff", muted: "#9aa3d9", accent: "#7fd4ff", accent2: "#b388ff", onacc: "#07102a" } },
+  { id: "deepblue", g: "Consoles", name: "Deep Blue", tag: "Next generation, neatly shelved.", greet: n => `Next generation welcomes you, ${n}.`, sym: "▲",
+    c: { bg: "#00122e", surface: "#07224d", surface2: "#0d3170", text: "#f2f6ff", muted: "#8fb0e6", accent: "#2f8cff", accent2: "#e6f0ff", onacc: "#001533" } },
+  { id: "neonduo", g: "Consoles", name: "Neon Duo", tag: "Two pads, one shelf.", greet: n => `Good to see you both, ${n}.`, sym: "◐",
+    c: { bg: "#14141c", surface: "#1f1f2b", surface2: "#2c2c3e", text: "#ffffff", muted: "#a5a5c0", accent: "#ff4d5e", accent2: "#2fd0ff", onacc: "#1a0508" } },
+  { id: "emerald", g: "Consoles", name: "Emerald Black", tag: "Dark, green and organised.", greet: n => `Welcome back, ${n}.`, sym: "⬢",
+    c: { bg: "#070b07", surface: "#101a10", surface2: "#1a2c1a", text: "#eaffea", muted: "#8fb88f", accent: "#3ddc4a", accent2: "#b8ffb0", onacc: "#04140a" } },
+  { id: "steel", g: "Consoles", name: "Steel Blue", tag: "The big library, tidy at last.", greet: n => `Library open, ${n}.`, sym: "▣",
+    c: { bg: "#10171e", surface: "#1b2631", surface2: "#26364a", text: "#e8f1f8", muted: "#8da2b5", accent: "#66c0f4", accent2: "#c7d5e0", onacc: "#08141c" } },
+  { id: "handheld", g: "Retro", name: "Handheld Green", tag: "Four shades of nostalgia.", greet: n => `Batteries charged, ${n}.`, sym: "▦",
+    c: { bg: "#d4e2a2", surface: "#c2d684", surface2: "#aec468", text: "#0f380f", muted: "#3f6a2a", accent: "#306230", accent2: "#0f380f", onacc: "#e8f2b8" } }
+];
+const THEME = Object.fromEntries(THEMES.map(t => [t.id, t]));
+const THEME_GROUPS = ["Favourites", "Consoles", "Retro"];
+
+function applyTheme(id) {
+  const t = THEME[id] || THEME.crystal, r = document.documentElement.style, c = t.c;
+  r.setProperty("--bg", c.bg); r.setProperty("--surface", c.surface); r.setProperty("--surface2", c.surface2);
+  r.setProperty("--text", c.text); r.setProperty("--muted", c.muted); r.setProperty("--accent", c.accent);
+  r.setProperty("--accent2", c.accent2); r.setProperty("--onacc", c.onacc);
+  r.setProperty("--border", t.id === "handheld" ? "#0f380f40" : "#ffffff24");
+  const m = $('meta[name="theme-color"]'); if (m) m.content = c.bg;
+  S.theme = t.id; ls.set("sp_theme", t.id);
+}
+
+/* ===================== STATE ===================== */
+const S = {
+  user: null, tab: ls.get("sp_tab", "library"), theme: ls.get("sp_theme", "crystal"),
+  games: [], members: {}, cfg: {}, owned: {}, rawgKey: ls.get("sp_rawg", ""),
+  q: "", sort: ls.get("sp_sort", "recent"),
+  f: { platform: "", genre: "", decade: "", publisher: "", by: "", sub: "" },
+  cpage: 0, add: null, auto: null, versions: new Map(), unsub: [], gotMembers: false
+};
+if (!["library", "consoles", "household", "settings"].includes(S.tab)) S.tab = "library";
+let app, auth, db;
+
+const me = () => S.user && S.user.uid;
+const otherUid = () => Object.keys(PEOPLE).find(u => u !== me());
+const personName = uid => { const m = S.members[uid]; return (m && (m.nickname || m.name)) || PEOPLE[uid] || "Someone"; };
+const myTheme = () => THEME[(S.members[me()] || {}).theme] || THEME[S.theme] || THEME.crystal;
+
+/* ===================== DATA INDEX ===================== */
+function rebuildIndex() {
+  S.versions = new Map();
+  for (const g of S.games) {
+    g.titleKey = norm(g.title);
+    if (!S.versions.has(g.titleKey)) S.versions.set(g.titleKey, []);
+    S.versions.get(g.titleKey).push(g);
+  }
+  for (const g of S.games) {
+    const p = PLAT[g.platform] || PLAT.other;
+    g._h = norm([g.title, p.l, p.s, (g.genres || []).join(" "), g.publisher, g.year, g.subName, g.subscription ? "subscription" : "", personName(g.addedBy)].join(" "));
+  }
+}
+const versionCount = g => (S.versions.get(g.titleKey) || []).length;
+
+const SORTS = {
+  recent: ["Newest added", (a, b) => (b.addedAt || 0) - (a.addedAt || 0)],
+  oldest: ["Oldest added", (a, b) => (a.addedAt || 0) - (b.addedAt || 0)],
+  az: ["Title A to Z", (a, b) => a.titleKey.localeCompare(b.titleKey)],
+  za: ["Title Z to A", (a, b) => b.titleKey.localeCompare(a.titleKey)],
+  yearnew: ["Year, newest first", (a, b) => (b.year || 0) - (a.year || 0) || a.titleKey.localeCompare(b.titleKey)],
+  yearold: ["Year, oldest first", (a, b) => (a.year || 9999) - (b.year || 9999) || a.titleKey.localeCompare(b.titleKey)],
+  platform: ["Platform", (a, b) => PLATFORMS.findIndex(p => p.k === a.platform) - PLATFORMS.findIndex(p => p.k === b.platform) || a.titleKey.localeCompare(b.titleKey)],
+  publisher: ["Publisher A to Z", (a, b) => (a.publisher ? 0 : 1) - (b.publisher ? 0 : 1) || norm(a.publisher).localeCompare(norm(b.publisher)) || a.titleKey.localeCompare(b.titleKey)],
+  by: ["Added by", (a, b) => personName(a.addedBy).localeCompare(personName(b.addedBy)) || a.titleKey.localeCompare(b.titleKey)]
+};
+
+if (!SORTS[S.sort]) S.sort = "recent";
+
+function visibleGames() {
+  const toks = norm(S.q).split(" ").filter(Boolean), f = S.f;
+  const a = S.games.filter(g => {
+    if (f.platform && g.platform !== f.platform) return false;
+    if (f.genre && !(g.genres || []).includes(f.genre)) return false;
+    if (f.decade && decadeOf(g.year) !== f.decade) return false;
+    if (f.publisher && g.publisher !== f.publisher) return false;
+    if (f.by && g.addedBy !== f.by) return false;
+    if (f.sub === "sub" && !g.subscription) return false;
+    if (f.sub === "own" && g.subscription) return false;
+    return toks.every(t => g._h.includes(t));
+  });
+  return a.sort((SORTS[S.sort] || SORTS.recent)[1]);
+}
+const activeFilters = () => Object.entries(S.f).filter(([, v]) => v);
+
+/* ===================== COVERS ===================== */
+const gradFor = p => `linear-gradient(135deg,${p.c},#000b)`;
+function coverHtml(g) {
+  const p = PLAT[g.platform] || PLAT.other, ph = initials(g.title);
+  if (g.cover) return `<img loading="lazy" alt="" src="${esc(g.cover)}" data-ph="${esc(ph)}" data-bg="${esc(gradFor(p))}">`;
+  return `<div class="ph" style="background:${esc(gradFor(p))}">${esc(ph)}</div>`;
+}
+document.addEventListener("error", e => {
+  const t = e.target;
+  if (t && t.tagName === "IMG" && t.dataset && t.dataset.ph) {
+    const d = document.createElement("div"); d.className = "ph"; d.style.background = t.dataset.bg; d.textContent = t.dataset.ph; t.replaceWith(d);
+  }
+}, true);
+
+/* ===================== UI BASICS ===================== */
+function toast(msg) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2600);
+}
+function openSheet(title, body, foot = "") {
+  const old = $("#sheetback"); if (old) old.remove();
+  const b = document.createElement("div"); b.className = "sheet-back"; b.id = "sheetback";
+  b.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><div class="sheet-head"><h2>${esc(title)}</h2><button type="button" class="x" data-action="close-sheet" aria-label="Close">✕</button></div><div class="sheet-body" id="sheetbody">${body}</div><div class="sheet-foot" id="sheetfoot">${foot}</div></div>`;
+  document.body.appendChild(b); document.body.classList.add("noscroll");
+}
+function setSheet(body, foot) {
+  const sb = $("#sheetbody"); if (sb && body != null) sb.innerHTML = body;
+  const sf = $("#sheetfoot"); if (sf && foot != null) sf.innerHTML = foot;
+}
+function closeSheet() {
+  const b = $("#sheetback"); if (b) b.remove();
+  document.body.classList.remove("noscroll"); S.add = null; S.pendingDelete = null; S.draftTheme = null;
+}
+const sheetOpen = () => !!$("#sheetback");
+
+/* ===================== SHELL ===================== */
+const NAV = [
+  { k: "library", l: "Library", i: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>' },
+  { k: "consoles", l: "Consoles", i: '<rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10v5M4.5 12.5h5"/><circle cx="16" cy="11.5" r="1"/><circle cx="18.5" cy="14" r="1"/>' },
+  { k: "household", l: "Household", i: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14c2.5 0 4 1.5 4.5 4.5"/>' },
+  { k: "settings", l: "Settings", i: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>' }
+];
+function navHtml() {
+  return NAV.map(n => `<button type="button" class="navbtn${S.tab === n.k ? " on" : ""}" data-tab="${n.k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${n.i}</svg><span>${n.l}</span></button>`).join("");
+}
+function showShell() {
+  $("#sidenav").innerHTML = `<div class="sbrand">${crystalSvg()}<span>SavePoint</span></div>${navHtml()}`;
+  $("#bottomnav").innerHTML = navHtml();
+  $("#brand").innerHTML = `${crystalSvg()}<span>SavePoint</span>`;
+  $("#topbar").hidden = false; $("#bottomnav").hidden = false; $("#fab").hidden = false; $("#rawgfoot").hidden = false;
+}
+function hideShell() {
+  $("#sidenav").innerHTML = ""; $("#bottomnav").hidden = true; $("#fab").hidden = true; $("#topbar").hidden = true; $("#rawgfoot").hidden = true;
+}
+function setTab(k) {
+  S.tab = k; S.cpage = 0; ls.set("sp_tab", k);
+  document.documentElement.dataset.tab = k;
+  $("#sidenav").innerHTML = `<div class="sbrand">${crystalSvg()}<span>SavePoint</span></div>${navHtml()}`;
+  $("#bottomnav").innerHTML = navHtml();
+  $("#toptab").textContent = k === "library" ? "" : NAV.find(n => n.k === k).l;
+  renderView(); window.scrollTo(0, 0);
+}
+function renderView() {
+  if (!S.user) return;
+  const ae = document.activeElement;
+  if (S.tab === "settings" && ae && ae.closest && ae.closest("#view") && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) return;
+  const v = $("#view");
+  if (S.tab === "library") { v.innerHTML = `${heroHtml()}<div class="resbar" id="resbar"></div><div class="grid" id="libList"></div>`; updateLibrary(); }
+  else if (S.tab === "consoles") v.innerHTML = consolesHtml();
+  else if (S.tab === "household") v.innerHTML = householdHtml();
+  else v.innerHTML = settingsHtml();
+}
+
+/* ===================== LIBRARY ===================== */
+function heroHtml() {
+  const t = myTheme(), n = personName(me());
+  const own = PLATFORMS.filter(p => S.owned[p.k]).length;
+  return `<section class="hero"><div class="hsym">${t.sym}</div><div><h1>${esc(t.name)}</h1><p class="tagline">${esc(t.tag)}</p><p class="greet">${esc(t.greet(n))}</p></div><div class="hstats"><b>${S.games.length}</b>games<b>${own}</b>consoles</div></section>`;
+}
+function cardHtml(g) {
+  const p = PLAT[g.platform] || PLAT.other, nv = versionCount(g);
+  return `<button type="button" class="card" data-action="open-game" data-id="${esc(g.id)}"><div class="cover">${coverHtml(g)}</div><div class="cmeta"><div class="ctitle">${esc(g.title)}</div><div class="crow"><span class="chip" style="--c:${p.c}">${esc(p.s)}</span>${g.year ? `<span>${g.year}</span>` : ""}</div><div class="tags">${nv > 1 ? `<span class="tag">${nv} versions</span>` : ""}${g.subscription ? `<span class="tag sub">${esc(g.subName || "Subscription")}</span>` : ""}</div></div></button>`;
+}
+function filterLabel(k, v) {
+  if (k === "platform") return (PLAT[v] || {}).l || v;
+  if (k === "by") return personName(v);
+  if (k === "sub") return v === "sub" ? "Subscription only" : "Not subscription";
+  return v;
+}
+function updateLibrary() {
+  if (S.tab !== "library" || !$("#libList")) return;
+  const list = visibleGames(), af = activeFilters();
+  $("#resbar").innerHTML = `<span>${list.length} ${list.length === 1 ? "game" : "games"}${list.length !== S.games.length ? ` of ${S.games.length}` : ""}</span>${af.map(([k, v]) => `<span class="fchip">${esc(filterLabel(k, v))}<button type="button" data-action="clear-filter" data-k="${k}" aria-label="Remove filter">✕</button></span>`).join("")}`;
+  $("#libList").innerHTML = list.length ? list.map(cardHtml).join("") :
+    `<div class="empty">${S.games.length ? "Nothing matches your search or filters." : "No games yet. Tap + to add the first one."}</div>`;
+  $("#sortBtn").textContent = "Sort: " + SORTS[S.sort][0];
+  $("#filterBtn").innerHTML = "Filters" + (af.length ? `<b>${af.length}</b>` : "");
+  const hs = $(".hstats"); if (hs) hs.innerHTML = `<b>${S.games.length}</b>games<b>${PLATFORMS.filter(p => S.owned[p.k]).length}</b>consoles`;
+}
+function openSort() {
+  const body = Object.entries(SORTS).map(([k, v]) => `<button type="button" class="opt${S.sort === k ? " on" : ""}" data-action="set-sort" data-v="${k}"><span>${v[0]}</span><span>${S.sort === k ? "✓" : ""}</span></button>`).join("");
+  openSheet("Sort by", body);
+}
+function uniq(arr) { return [...new Set(arr.filter(Boolean))]; }
+function openFilters() {
+  const g = S.games, f = S.f;
+  const sel = (id, label, opts) => `<div class="field"><label for="${id}">${label}</label><select id="${id}"><option value="">Any</option>${opts.map(([v, t]) => `<option value="${esc(v)}"${f[id.slice(2)] === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></div>`;
+  const plats = PLATFORMS.filter(p => g.some(x => x.platform === p.k)).map(p => [p.k, p.l]);
+  const genres = uniq(g.flatMap(x => x.genres || [])).sort().map(x => [x, x]);
+  const decs = uniq(g.map(x => decadeOf(x.year))).sort().map(x => [x, x]);
+  const pubs = uniq(g.map(x => x.publisher)).sort((a, b) => a.localeCompare(b)).map(x => [x, x]);
+  const bys = uniq(g.map(x => x.addedBy)).map(u => [u, personName(u)]);
+  const body = sel("f_platform", "Platform", plats) + sel("f_genre", "Genre", genres) + sel("f_decade", "Decade", decs) + sel("f_publisher", "Publisher", pubs) + sel("f_by", "Added by", bys) +
+    sel("f_sub", "Subscription", [["sub", "Subscription only"], ["own", "Not subscription"]]);
+  openSheet("Filters", body, `<button type="button" class="btn" data-action="clear-filters">Clear</button><button type="button" class="btn primary" data-action="apply-filters">Show games</button>`);
+}
+
+/* ===================== GAME DETAIL / FORM ===================== */
+function openGame(id) {
+  const g = S.games.find(x => x.id === id); if (!g) return;
+  const p = PLAT[g.platform] || PLAT.other, others = (S.versions.get(g.titleKey) || []).filter(x => x.id !== g.id);
+  const kv = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
+  const body = `<div class="big">${coverHtml(g)}</div><dl class="kv">${kv("Platform", esc(p.l))}${kv("Year", g.year || "")}${kv("Genres", esc((g.genres || []).join(", ")))}${kv("Publisher", esc(g.publisher || ""))}${kv("Subscription", g.subscription ? esc(g.subName || "Yes") : "")}${kv("Added by", esc(personName(g.addedBy)) + (g.addedAt ? ", " + new Date(g.addedAt).toLocaleDateString("en-IE") : ""))}${kv("Notes", esc(g.notes || ""))}</dl>${others.length ? `<div class="gname">Other versions</div>${others.map(o => `<button type="button" class="opt" data-action="open-game" data-id="${esc(o.id)}"><span>${esc((PLAT[o.platform] || PLAT.other).l)}</span><span>›</span></button>`).join("")}` : ""}`;
+  openSheet(g.title, body, `<button type="button" class="btn danger" data-action="delete-game" data-id="${esc(g.id)}">Delete</button><button type="button" class="btn primary" data-action="edit-game" data-id="${esc(g.id)}">Edit</button>`);
+}
+function platOptionsHtml(sel, suggested = []) {
+  const opt = p => `<option value="${p.k}"${sel === p.k ? " selected" : ""}>${esc(p.l)}</option>`;
+  let h = `<option value="">Choose platform…</option>`;
+  if (suggested.length) h += `<optgroup label="Suggested">${suggested.map(k => opt(PLAT[k])).join("")}</optgroup>`;
+  for (const grp of PGROUPS) h += `<optgroup label="${grp}">${PLATFORMS.filter(p => p.g === grp).map(opt).join("")}</optgroup>`;
+  return h;
+}
+function formHtml(d) {
+  return `<div id="formMsg"></div>
+<div class="field"><label for="f_title">Title</label><input id="f_title" value="${esc(d.title)}" autocomplete="off" maxlength="120"></div>
+<div class="field"><label for="f_platform">Platform</label><select id="f_platform">${platOptionsHtml(d.platform, d.suggested || [])}</select></div>
+<div class="row2"><div class="field"><label for="f_year">Year</label><input id="f_year" inputmode="numeric" maxlength="4" value="${esc(d.year || "")}"></div>
+<div class="field"><label for="f_publisher">Publisher</label><input id="f_publisher" value="${esc(d.publisher || "")}" autocomplete="off"></div></div>
+<div class="field"><label for="f_genres">Genres (comma separated)</label><input id="f_genres" value="${esc(d.genres || "")}" autocomplete="off"></div>
+<div class="field"><label for="f_cover">Cover image link (optional)</label><input id="f_cover" value="${esc(d.cover || "")}" autocomplete="off" inputmode="url"></div>
+<label class="check"><input type="checkbox" id="f_sub"${d.subscription ? " checked" : ""}><span>Subscription game (for example PS Plus)</span></label>
+<div class="field" id="subrow"${d.subscription ? "" : " hidden"}><label for="f_subname">Subscription name</label><input id="f_subname" list="sublist" value="${esc(d.subName || "")}" autocomplete="off"><datalist id="sublist"><option value="PS Plus"><option value="Game Pass"><option value="Nintendo Switch Online"><option value="EA Play"><option value="Ubisoft+"></datalist></div>
+<div class="field"><label for="f_notes">Notes</label><textarea id="f_notes">${esc(d.notes || "")}</textarea></div>
+<p class="attr">${S.add && S.add.draft && S.add.draft.rawgId ? 'Details from <a href="https://rawg.io" target="_blank" rel="noopener">RAWG</a>. ' : ""}You can change anything by hand.</p>`;
+}
+const saveFoot = label => `<button type="button" class="btn ghost" data-action="close-sheet">Cancel</button><button type="button" class="btn primary" id="saveBtn" data-action="save-game">${label}</button>`;
+function readForm() {
+  const v = id => (($("#" + id) || {}).value || "").trim();
+  return { title: v("f_title"), platform: v("f_platform"), year: v("f_year"), publisher: v("f_publisher"), genres: v("f_genres"), cover: v("f_cover"), subscription: !!($("#f_sub") || {}).checked, subName: v("f_subname"), notes: v("f_notes") };
+}
+function formMsg(text, kind = "bad") { const m = $("#formMsg"); if (m) m.innerHTML = text ? `<div class="msg ${kind}">${text}</div>` : ""; }
+
+function openAdd(opts = {}) {
+  const editing = opts.editId ? S.games.find(g => g.id === opts.editId) : null;
+  S.add = { mode: "find", q: "", results: [], busy: false, msg: "", draft: null, editId: null, dupOk: false, token: 0 };
+  if (editing) {
+    S.add.mode = "form"; S.add.editId = editing.id;
+    S.add.draft = { title: editing.title, platform: editing.platform, year: editing.year || "", publisher: editing.publisher || "", genres: (editing.genres || []).join(", "), cover: editing.cover || "", subscription: !!editing.subscription, subName: editing.subName || "", notes: editing.notes || "", rawgId: editing.rawgId || null };
+  } else if (opts.platform) {
+    S.add.presetPlatform = opts.platform;
+  }
+  paintAdd(true);
+}
+function paintAdd(first) {
+  const a = S.add; if (!a) return;
+  const title = a.editId ? "Edit game" : "Add a game";
+  let body = "";
+  if (!a.editId) body += `<div class="seg"><button type="button" class="${a.mode === "find" ? "on" : ""}" data-action="add-mode" data-v="find">Find a game</button><button type="button" class="${a.mode === "form" ? "on" : ""}" data-action="add-mode" data-v="form">By hand</button></div>`;
+  let foot = "";
+  if (a.mode === "find") {
+    const hasKey = !!S.rawgKey;
+    body += hasKey ? `<div class="field"><label for="addq">Game name</label><input id="addq" type="search" value="${esc(a.q)}" autocomplete="off" enterkeyhint="search" placeholder="For example: Final Fantasy X"></div><div id="results"></div><p class="attr">Search by <a href="https://rawg.io" target="_blank" rel="noopener">RAWG</a></p>` :
+      `<div class="msg warn">Search needs a free RAWG key. Add it in Settings, or switch to "By hand".</div>`;
+  } else {
+    if (!a.draft) a.draft = { title: "", platform: a.presetPlatform || "", year: "", publisher: "", genres: "", cover: "", subscription: false, subName: "", notes: "", rawgId: null };
+    body += (a.fromResults ? `<button type="button" class="btn sm ghost" data-action="add-mode" data-v="find" style="margin-bottom:10px">← Back to results</button>` : "") + formHtml(a.draft);
+    foot = saveFoot(a.editId ? "Save changes" : "Save to library");
+  }
+  if (first || !sheetOpen()) openSheet(title, body, foot); else { const h = $(".sheet-head h2"); if (h) h.textContent = title; setSheet(body, foot); }
+  if (a.mode === "find") { paintResults(); const q = $("#addq"); if (q && !a.results.length) q.focus(); }
+}
+function paintResults() {
+  const a = S.add, box = $("#results"); if (!a || !box) return;
+  if (a.busy) { box.innerHTML = `<p class="attr">Searching…</p>`; return; }
+  box.innerHTML = (a.msg ? `<div class="msg">${esc(a.msg)}</div>` : "") + a.results.map((r, i) => `<button type="button" class="res" data-action="pick-result" data-i="${i}"><div class="thumb">${r.cover ? `<img src="${esc(r.cover)}" alt="" loading="lazy">` : ""}</div><div><b>${esc(r.title)}</b><span>${esc([r.year, r.genres.slice(0, 2).join(", "), r.platShort].filter(Boolean).join(" · "))}</span></div></button>`).join("");
+}
+
+/* RAWG */
+async function rawg(path, params = {}) {
+  const key = S.rawgKey; if (!key) { const e = new Error("nokey"); throw e; }
+  const u = new URL("https://api.rawg.io/api/" + path); u.searchParams.set("key", key);
+  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+  const r = await fetch(u.toString());
+  if (!r.ok) { const e = new Error("RAWG " + r.status); e.status = r.status; throw e; }
+  return r.json();
+}
+function friendly(e) {
+  if (e.message === "nokey") return "Add your RAWG key in Settings first, or add the game by hand.";
+  if (e.status === 401 || e.status === 403) return "RAWG did not accept the key. Check it in Settings.";
+  if (e.status === 429) return "The RAWG monthly limit has been reached.";
+  return "Could not reach RAWG. Check the connection, or add the game by hand.";
+}
+function mapResult(r) {
+  const plats = (r.platforms || []).map(p => p.platform && p.platform.name).filter(Boolean);
+  const keys = uniq(plats.map(mapPlat));
+  return { rawgId: r.id, title: r.name || "", year: r.released ? String(r.released).slice(0, 4) : "", cover: r.background_image || "", genres: (r.genres || []).map(g => g.name), suggested: keys, platShort: keys.slice(0, 4).map(k => PLAT[k].s).join(", ") };
+}
+async function doSearch() {
+  const a = S.add; if (!a) return;
+  const q = (($("#addq") || {}).value || "").trim(); if (q.length < 2) return;
+  a.q = q; a.busy = true; a.msg = ""; const tok = ++a.token; paintResults();
+  try {
+    const j = await rawg("games", { search: q, page_size: 12 });
+    if (S.add !== a || tok !== a.token) return;
+    a.results = (j.results || []).map(mapResult);
+    if (!a.results.length) a.msg = "No matches. Try fewer words, or add it by hand.";
+  } catch (e) { if (S.add !== a || tok !== a.token) return; a.results = []; a.msg = friendly(e); log("rawg search failed " + e.message); }
+  a.busy = false; paintResults();
+}
+async function fillDetail(id) {
+  try {
+    const j = await rawg("games/" + id);
+    const a = S.add; if (!a || a.mode !== "form" || !a.draft || a.draft.rawgId !== id) return;
+    const pub = (j.publishers || []).map(p => p.name).join(", ") || (j.developers || []).map(p => p.name).join(", ");
+    const el = $("#f_publisher"); if (el && !el.value.trim() && pub) el.value = pub;
+  } catch (e) { log("detail failed " + e.message); }
+}
+function pickResult(i) {
+  const a = S.add, r = a && a.results[i]; if (!r) return;
+  a.fromResults = true; a.mode = "form"; a.dupOk = false;
+  a.draft = { title: r.title, platform: r.suggested.length === 1 ? r.suggested[0] : (a.presetPlatform || ""), suggested: r.suggested, year: r.year, publisher: "", genres: r.genres.join(", "), cover: r.cover, subscription: false, subName: "", notes: "", rawgId: r.rawgId };
+  paintAdd(); fillDetail(r.rawgId);
+}
+
+/* Save */
+function saveGame() {
+  const a = S.add; if (!a) return;
+  const d = readForm();
+  if (!d.title) return formMsg("Please enter a title.");
+  if (!d.platform) return formMsg("Please choose a platform.");
+  let year = null;
+  if (d.year) { year = parseInt(d.year, 10); if (!/^\d{4}$/.test(d.year) || year < 1950 || year > 2100) return formMsg("Year should be four digits, like 2001."); }
+  const key = norm(d.title);
+  const same = S.games.filter(g => g.titleKey === key && g.id !== a.editId);
+  if (same.some(g => g.platform === d.platform)) return formMsg(`Already in your library on ${esc(PLAT[d.platform].l)}.`);
+  if (same.length && !a.dupOk) {
+    a.dupOk = true; formMsg(`Another version is already saved (${esc(same.map(g => PLAT[g.platform] ? PLAT[g.platform].l : "Other").join(", "))}). Tap "Add anyway" to save this one too.`, "warn");
+    const b = $("#saveBtn"); if (b) b.textContent = a.editId ? "Save anyway" : "Add anyway"; return;
+  }
+  const data = {
+    title: d.title, platform: d.platform, year, publisher: d.publisher, genres: d.genres.split(",").map(x => x.trim()).filter(Boolean),
+    cover: d.cover, subscription: d.subscription, subName: d.subscription ? d.subName : "", notes: d.notes,
+    rawgId: (a.draft && a.draft.rawgId) || null
+  };
+  if (a.editId) {
+    updateDoc(doc(db, "games", a.editId), data).catch(e => showErr("Save failed: " + e.message));
+    toast("Changes saved");
+  } else {
+    addDoc(collection(db, "games"), { ...data, addedBy: me(), addedByName: S.user.displayName || PEOPLE[me()] || "", addedAt: Date.now() }).catch(e => showErr("Save failed: " + e.message));
+    toast("Saved to library");
+  }
+  closeSheet();
+}
+function deleteGame(id, btn) {
+  if (S.pendingDelete !== id) { S.pendingDelete = id; btn.textContent = "Tap again to delete"; setTimeout(() => { if (S.pendingDelete === id && btn.isConnected) { S.pendingDelete = null; btn.textContent = "Delete"; } }, 4000); return; }
+  deleteDoc(doc(db, "games", id)).catch(e => showErr("Delete failed: " + e.message));
+  closeSheet(); toast("Deleted");
+}
+
+/* ===================== CONSOLES: one shared sticker album, consoles only ===================== */
+function consolesHtml() {
+  const total = PLATFORMS.length, own = PLATFORMS.filter(p => S.owned[p.k]).length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  S.cpage = Math.min(Math.max(0, S.cpage), pages - 1);
+  const slice = PLATFORMS.slice(S.cpage * PAGE_SIZE, (S.cpage + 1) * PAGE_SIZE);
+  const rots = [-1.6, 1.1, -0.7, 1.7, -1.2, 0.8];
+  let cells = slice.map((p, i) => S.owned[p.k]
+    ? `<button type="button" class="sticker cs" style="--rot:${rots[i % rots.length]}deg" data-action="open-console" data-k="${p.k}"><div class="img" style="background:${p.c}33">${consoleIcon(p.t, p.c)}</div><div class="cap">${esc(p.l)}</div></button>`
+    : `<button type="button" class="slot cs" data-action="open-console" data-k="${p.k}">${consoleIcon(p.t, p.c)}<span>${esc(p.l)}</span></button>`).join("");
+  for (let i = slice.length; i < PAGE_SIZE; i++) cells += `<div class="slot blank"></div>`;
+  return `<div class="albhead"><div style="flex:1"><h2>Console album</h2><div class="sub">${own} of ${total} consoles in the house</div></div></div>
+<div class="album">${cells}</div>
+<div class="pager"><button type="button" class="btn sm" data-action="console-page" data-d="-1"${S.cpage <= 0 ? " disabled" : ""}>\u2190</button><span>Page ${S.cpage + 1} of ${pages}</span><button type="button" class="btn sm" data-action="console-page" data-d="1"${S.cpage >= pages - 1 ? " disabled" : ""}>\u2192</button></div>`;
+}
+function openConsole(k) {
+  const p = PLAT[k]; if (!p) return;
+  const n = S.games.filter(g => g.platform === k).length, on = !!S.owned[k];
+  const body = `<div class="big" style="display:grid;place-items:center;background:${p.c}33"><div style="width:120px">${consoleIcon(p.t, p.c)}</div></div><dl class="kv"><dt>Maker</dt><dd>${esc(p.g)}</dd><dt>In the house</dt><dd>${on ? "Yes" : "Not yet"}</dd><dt>Games saved</dt><dd>${n}</dd></dl>`;
+  openSheet(p.l, body, `<button type="button" class="btn${on ? "" : " primary"}" data-action="toggle-console" data-k="${k}" data-sheet="1">${on ? "Remove from the house" : "We have it"}</button>${n ? `<button type="button" class="btn primary" data-action="show-console-games" data-k="${k}">Show games</button>` : ""}`);
+}
+
+/* ===================== HOUSEHOLD ===================== */
+function pcardHtml(uid) {
+  const m = S.members[uid], t = THEME[(m || {}).theme] || THEME.crystal, c = t.c, mine = uid === me();
+  const count = S.games.filter(g => g.addedBy === uid).length;
+  const favs = ((m && m.favs) || []).map(id => S.games.find(g => g.id === id)).filter(Boolean).slice(0, 3);
+  const style = `--p1:${c.surface};--p2:${c.surface2};--pt:${c.text};--pa:${c.accent};--po:${c.onacc}`;
+  return `<article class="pcard" style="${style}"><div class="phead"><div class="av">${t.sym}</div><div><div class="pname">${esc(personName(uid))}${mine ? " (you)" : ""}</div><div class="psub">${m ? esc(t.name) : "Has not signed in yet"}</div></div></div>
+<div class="pstats"><div><b>${count}</b>games added</div></div>
+${favs.length ? `<div class="favs">${favs.map(g => `<button type="button" class="fav" data-action="open-game" data-id="${esc(g.id)}"><div class="cover">${coverHtml(g)}</div><div class="t">${esc(g.title)}</div></button>`).join("")}</div>` : `<div class="favnone">${mine ? "No favourite games chosen yet." : "No favourite games chosen."}</div>`}
+${mine ? `<button type="button" class="btn sm" data-action="edit-card">Edit my card</button>` : ""}</article>`;
+}
+function householdHtml() {
+  return `<div class="people">${pcardHtml(me())}${pcardHtml(otherUid())}</div>`;
+}
+function themePickerHtml(sel) {
+  return THEME_GROUPS.map(gr => `<div class="gname">${gr}</div><div class="themes">${THEMES.filter(t => t.g === gr).map(t => `<button type="button" class="th${t.id === sel ? " on" : ""}" data-action="pick-theme" data-id="${t.id}"><span class="sw" style="background:${t.c.accent};color:${t.c.onacc}">${t.sym}</span><span><b>${esc(t.name)}</b><small>${esc(t.tag)}</small></span></button>`).join("")}</div>`).join("");
+}
+function openCardEditor() {
+  const m = S.members[me()] || {}; S.draftTheme = m.theme || S.theme;
+  const games = [...S.games].sort((a, b) => a.titleKey.localeCompare(b.titleKey));
+  const favs = m.favs || [];
+  const favSel = i => `<div class="field"><label for="fav${i}">Favourite game ${i + 1}</label><select id="fav${i}"><option value="">None</option>${games.map(g => `<option value="${esc(g.id)}"${favs[i] === g.id ? " selected" : ""}>${esc(g.title)} (${esc((PLAT[g.platform] || PLAT.other).s)})</option>`).join("")}</select></div>`;
+  openSheet("My card", `<div class="field"><label for="nick">Nickname (optional, up to 20 characters)</label><input id="nick" maxlength="20" value="${esc(m.nickname || "")}" autocomplete="off"></div>${favSel(0)}${favSel(1)}${favSel(2)}<div class="gname" style="margin-top:4px">Theme</div><div id="themepick">${themePickerHtml(S.draftTheme)}</div>`,
+    `<button type="button" class="btn ghost" data-action="close-sheet">Cancel</button><button type="button" class="btn primary" data-action="save-card">Save</button>`);
+}
+function saveCard() {
+  const nick = (($("#nick") || {}).value || "").trim().slice(0, 20);
+  const favs = [0, 1, 2].map(i => (($("#fav" + i) || {}).value || "")).filter(Boolean);
+  const data = { name: S.user.displayName || PEOPLE[me()] || "", nickname: nick, theme: S.draftTheme || S.theme, favs: uniq(favs) };
+  setDoc(doc(db, "gamesMeta", "household", "members", me()), data, { merge: true }).catch(e => showErr("Save failed: " + e.message));
+  S.members[me()] = { ...(S.members[me()] || {}), ...data };
+  applyTheme(data.theme); rebuildIndex(); closeSheet(); renderView(); toast("Card saved");
+}
+
+/* ===================== SETTINGS ===================== */
+function settingsHtml() {
+  const t = myTheme();
+  return `<div class="set"><h3>App version</h3><div class="ver">App version ${APP_VERSION}</div><p style="margin:6px 0 0">If something looks old, close and reopen the app once.</p></div>
+<div class="set"><h3>Account</h3><p>Signed in as ${esc(S.user.displayName || "")} (${esc(S.user.email || "")}).</p><div class="btns"><button type="button" class="btn sm" data-action="signout">Sign out</button></div></div>
+<div class="set"><h3>My card and theme</h3><p>Current theme: ${esc(t.name)}.</p><div class="btns"><button type="button" class="btn sm primary" data-action="edit-card">Change nickname, favourites and theme</button></div></div>
+<div class="set"><h3>Game database (RAWG)</h3><p>Used for search, covers and details. Paste the key once; it is saved for both of you.</p>
+<div class="field"><label for="rawgkey">RAWG key</label><input id="rawgkey" type="password" autocomplete="off" value="${esc(S.rawgKey)}"></div>
+<div class="btns"><button type="button" class="btn sm primary" data-action="save-key">Save key</button><button type="button" class="btn sm" data-action="test-key">Test key</button></div>
+<p id="keyStatus" style="margin-top:8px"></p>
+<p style="margin-top:12px">Automatic tools only fill empty fields and never change what you edited. Only exact title matches are used.</p>
+<div class="btns"><button type="button" class="btn sm" data-action="auto-covers">Assign covers automatically</button><button type="button" class="btn sm" data-action="auto-match">Match games with RAWG</button><button type="button" class="btn sm ghost" data-action="stop-auto">Stop</button></div>
+<p id="autoStatus" style="margin-top:8px"></p></div>
+<div class="set"><h3>Backup</h3><p>Saves all games, cards and owned consoles to a file on this device.</p><div class="btns"><button type="button" class="btn sm primary" data-action="export">Export JSON backup</button></div></div>
+<div class="set"><h3>About</h3><p>Game data and images from <a href="https://rawg.io" target="_blank" rel="noopener">RAWG</a>. Add ?debug=1 to the web address to see a tap log.</p></div>`;
+}
+function setStatus(id, txt) { const el = $("#" + id); if (el) el.textContent = txt; }
+async function testKey() {
+  S.rawgKey = (($("#rawgkey") || {}).value || "").trim();
+  setStatus("keyStatus", "Testing…");
+  try { const j = await rawg("games", { search: "zelda", page_size: 1 }); setStatus("keyStatus", (j.results && j.results.length) ? "Key works." : "Key accepted, but no results came back."); }
+  catch (e) { setStatus("keyStatus", friendly(e)); }
+}
+function saveKey() {
+  const k = (($("#rawgkey") || {}).value || "").trim();
+  S.rawgKey = k; ls.set("sp_rawg", k);
+  setDoc(doc(db, "gamesMeta", "household", "config", "main"), { rawgKey: k }, { merge: true }).catch(e => showErr("Save failed: " + e.message));
+  setStatus("keyStatus", k ? "Key saved." : "Key removed."); toast("Saved");
+}
+async function autoMatch(mode) {
+  if (S.auto && S.auto.run) return setStatus("autoStatus", "Already running.");
+  if (!S.rawgKey) return setStatus("autoStatus", friendly(new Error("nokey")));
+  S.auto = { run: true, stop: false };
+  const list = S.games.filter(g => mode === "covers" ? !g.cover : (!g.rawgId || !(g.genres || []).length || !g.year || !g.publisher));
+  if (!list.length) { S.auto = null; return setStatus("autoStatus", "Nothing to fill in."); }
+  let done = 0, upd = 0, miss = 0, stopped = "";
+  for (const g of list) {
+    if (S.auto.stop) { stopped = " (stopped)"; break; }
+    try {
+      let info = null;
+      if (g.rawgId) info = await rawg("games/" + g.rawgId);
+      else {
+        const j = await rawg("games", { search: g.title, page_size: 5 });
+        const hit = (j.results || []).find(r => norm(r.name) === g.titleKey);
+        if (hit) info = mode === "covers" ? hit : await rawg("games/" + hit.id);
+      }
+      if (!info) miss++;
+      else {
+        const patch = {};
+        if (!g.cover && info.background_image) patch.cover = info.background_image;
+        if (mode === "match") {
+          if (!g.rawgId) patch.rawgId = info.id;
+          if (!g.year && info.released) patch.year = parseInt(String(info.released).slice(0, 4), 10);
+          if (!(g.genres || []).length && (info.genres || []).length) patch.genres = info.genres.map(x => x.name);
+          if (!g.publisher) { const pub = (info.publishers || []).map(p => p.name).join(", "); if (pub) patch.publisher = pub; }
+        }
+        if (Object.keys(patch).length) { updateDoc(doc(db, "games", g.id), patch).catch(e => showErr("Update failed: " + e.message)); upd++; } else miss++;
+      }
+    } catch (e) {
+      if (e.message === "nokey" || [401, 403, 429].includes(e.status)) { setStatus("autoStatus", friendly(e)); S.auto = null; return; }
+      miss++;
+    }
+    done++; setStatus("autoStatus", `${done} of ${list.length} checked…`); await sleep(150);
+  }
+  S.auto = null;
+  setStatus("autoStatus", `Done${stopped}: ${upd} updated, ${miss} left as they were (no exact match or nothing to add).`);
+}
+function exportJson() {
+  const data = { app: "SavePoint", version: APP_VERSION, exportedAt: new Date().toISOString(), games: S.games.map(g => { const { _h, titleKey, ...rest } = g; return rest; }), members: S.members, consolesOwned: S.owned };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `savepoint-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  toast("Backup saved");
+}
+
+/* ===================== AUTH + DATA LISTENERS ===================== */
+function showCentered(html) { hideShell(); $("#view").innerHTML = html; }
+function showSetup() {
+  showCentered(`<div class="setupbox"><h1>One step left</h1><p>SavePoint needs your Firebase details. They are the same ones Musicbox uses.</p><ol><li>Open your Musicbox <code>index.html</code> in a text editor.</li><li>Search for <code>firebaseConfig</code> and copy the block with <code>apiKey</code>, <code>messagingSenderId</code> and <code>appId</code>.</li><li>Open this app's <code>index.html</code>, find <code>FIREBASE_CONFIG</code> near the top, and paste those three values over the <code>PASTE_</code> words.</li></ol></div>`);
+}
+function showLogin(msg = "") {
+  showCentered(`<div class="login">${crystalSvg()}<h1>SavePoint</h1><p>A private game library for two.</p><button type="button" class="btn primary" data-action="signin">Sign in with Google</button>${msg ? `<div class="msg bad" style="margin-top:16px">${esc(msg)}</div>` : ""}</div>`);
+}
+function showDenied(user) {
+  const why = !user.emailVerified ? "This Google account's email is not verified." : "This Google account is not on the household list.";
+  showCentered(`<div class="login">${crystalSvg()}<h1>No access</h1><p>${esc(why)}</p><button type="button" class="btn" data-action="signout">Sign out</button></div>`);
+}
+function stopListeners() { S.unsub.forEach(u => { try { u(); } catch (e) {} }); S.unsub = []; }
+function fsError(e) {
+  if (e && e.code === "permission-denied") showErr("Firestore says permission denied. Publish the SavePoint rules first (README, step 3).");
+  else showErr("Database error: " + (e && e.message));
+}
+function startListeners() {
+  stopListeners();
+  S.unsub.push(onSnapshot(collection(db, "games"), snap => {
+    S.games = snap.docs.map(d => ({ id: d.id, ...d.data() })); rebuildIndex();
+    if (S.tab === "library") updateLibrary(); else if (!sheetOpen()) renderView();
+  }, fsError));
+  S.unsub.push(onSnapshot(collection(db, "gamesMeta", "household", "members"), snap => {
+    S.members = {}; snap.docs.forEach(d => { S.members[d.id] = d.data(); });
+    const mine = S.members[me()];
+    if (!mine && !S.gotMembers) setDoc(doc(db, "gamesMeta", "household", "members", me()), { name: S.user.displayName || PEOPLE[me()] || "", nickname: "", theme: S.theme || "crystal", favs: [] }, { merge: true }).catch(fsError);
+    S.gotMembers = true;
+    if (mine && mine.theme && mine.theme !== S.theme) applyTheme(mine.theme);
+    rebuildIndex(); if (!sheetOpen()) renderView(); else updateLibrary();
+  }, fsError));
+  S.unsub.push(onSnapshot(doc(db, "gamesMeta", "household", "config", "main"), snap => {
+    const d = snap.exists() ? snap.data() : {}; S.cfg = d;
+    if (d.rawgKey) { S.rawgKey = d.rawgKey; ls.set("sp_rawg", d.rawgKey); }
+  }, fsError));
+  S.unsub.push(onSnapshot(doc(db, "gamesMeta", "household", "config", "consoles"), snap => {
+    S.owned = (snap.exists() && snap.data().owned) || {};
+    if (!sheetOpen()) renderView(); else updateLibrary();
+  }, fsError));
+}
+function onUser(user) {
+  if (!user) { stopListeners(); S.user = null; showLogin(); return; }
+  if (!user.emailVerified || !PEOPLE[user.uid]) { stopListeners(); S.user = null; showDenied(user); return; }
+  S.user = user; applyTheme(S.theme); showShell(); startListeners(); setTab(S.tab);
+}
+async function signIn() {
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch (e) {
+    log("signin " + (e && e.code));
+    if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment")) { try { await signInWithRedirect(auth, new GoogleAuthProvider()); return; } catch (x) { e = x; } }
+    if (e && (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request")) return;
+    showLogin("Sign in failed: " + (e && (e.message || e.code)));
+  }
+}
+
+/* ===================== EVENTS ===================== */
+document.addEventListener("click", e => {
+  const tb = e.target.closest("button[data-tab]");
+  if (tb) { setTab(tb.dataset.tab); return; }
+  const sb = e.target.closest(".sheet-back");
+  if (e.target === sb) { closeSheet(); return; }
+  const el = e.target.closest("[data-action]"); if (!el) return;
+  act(el.dataset.action, el, e);
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && sheetOpen()) closeSheet();
+  if (e.key === "Enter" && e.target && e.target.id === "addq") { e.preventDefault(); doSearch(); }
+});
+let searchTimer = null, addTimer = null;
+document.addEventListener("input", e => {
+  const id = e.target && e.target.id;
+  if (id === "q") { S.q = e.target.value; clearTimeout(searchTimer); searchTimer = setTimeout(updateLibrary, 120); }
+  else if (id === "addq") { clearTimeout(addTimer); const v = e.target.value.trim(); if (v.length >= 3) addTimer = setTimeout(doSearch, 700); }
+  else if (id === "f_title" && S.add) { S.add.dupOk = false; const b = $("#saveBtn"); if (b) b.textContent = S.add.editId ? "Save changes" : "Save to library"; }
+});
+document.addEventListener("change", e => {
+  const id = e.target && e.target.id;
+  if (id === "f_sub") { const r = $("#subrow"); if (r) r.hidden = !e.target.checked; }
+  if (id === "f_platform" && S.add) { S.add.dupOk = false; const b = $("#saveBtn"); if (b) b.textContent = S.add.editId ? "Save changes" : "Save to library"; formMsg(""); }
+});
+
+function act(name, el) {
+  switch (name) {
+    case "signin": return signIn();
+    case "signout": return signOut(auth).catch(e => showErr(e.message));
+    case "close-sheet": return closeSheet();
+    case "open-add": return openAdd();
+    case "add-mode": { const a = S.add; if (!a) return; if (a.mode === "form" && $("#f_title")) a.draft = { ...(a.draft || {}), ...readForm() }; a.mode = el.dataset.v; a.dupOk = false; paintAdd(); return; }
+    case "pick-result": return pickResult(+el.dataset.i);
+    case "save-game": return saveGame();
+    case "open-game": { const id = el.dataset.id; closeSheet(); return openGame(id); }
+    case "edit-game": { const id = el.dataset.id; closeSheet(); return openAdd({ editId: id }); }
+    case "delete-game": return deleteGame(el.dataset.id, el);
+    case "open-sort": return openSort();
+    case "set-sort": S.sort = el.dataset.v; ls.set("sp_sort", S.sort); closeSheet(); return updateLibrary();
+    case "open-filters": return openFilters();
+    case "apply-filters": for (const k of Object.keys(S.f)) S.f[k] = (($("#f_" + k) || {}).value || ""); closeSheet(); return updateLibrary();
+    case "clear-filters": for (const k of Object.keys(S.f)) S.f[k] = ""; closeSheet(); return updateLibrary();
+    case "clear-filter": S.f[el.dataset.k] = ""; return updateLibrary();
+    case "open-console": return openConsole(el.dataset.k);
+    case "console-page": S.cpage += +el.dataset.d; return renderView();
+    case "show-console-games": { const k = el.dataset.k; closeSheet(); S.f = { platform: k, genre: "", decade: "", publisher: "", by: "", sub: "" }; S.q = ""; const q = $("#q"); if (q) q.value = ""; return setTab("library"); }
+    case "toggle-console": {
+      const k = el.dataset.k, v = !S.owned[k]; S.owned = { ...S.owned, [k]: v }; if (el.dataset.sheet) closeSheet(); renderView();
+      return setDoc(doc(db, "gamesMeta", "household", "config", "consoles"), { owned: { [k]: v } }, { merge: true }).catch(e => showErr("Save failed: " + e.message));
+    }
+    case "edit-card": return openCardEditor();
+    case "pick-theme": { S.draftTheme = el.dataset.id; const p = $("#themepick"); if (p) p.innerHTML = themePickerHtml(S.draftTheme); return; }
+    case "save-card": return saveCard();
+    case "save-key": return saveKey();
+    case "test-key": return testKey();
+    case "auto-covers": return autoMatch("covers");
+    case "auto-match": return autoMatch("match");
+    case "stop-auto": if (S.auto) S.auto.stop = true; return;
+    case "export": return exportJson();
+  }
+}
+
+/* ===================== BOOT ===================== */
+function boot() {
+  log("boot v" + APP_VERSION);
+  applyTheme(S.theme);
+  if (/PASTE_/.test(JSON.stringify(FIREBASE_CONFIG))) return showSetup();
+  app = initializeApp(FIREBASE_CONFIG); auth = getAuth(app);
+  try { db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+  catch (e) { log("persistent cache failed: " + e.message); db = initializeFirestore(app, {}); }
+  onAuthStateChanged(auth, onUser, e => showErr("Sign-in check failed: " + e.message));
+}
+try { boot(); } catch (e) { showErr("Start-up failed: " + (e && e.message)); }
+
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(function(e){if(window.__spLog)window.__spLog('sw register failed '+e)});
+  });
+}
+</script>
+</body>
+</html>
