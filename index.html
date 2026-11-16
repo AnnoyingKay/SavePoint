@@ -740,7 +740,7 @@ const S = {
   user: null, tab: ls.get("sp_tab", "library"), theme: ls.get("sp_theme", "crystal"), art: ls.get("sp_art", "1") !== "0", motion: ls.get("sp_motion", matchMedia("(prefers-reduced-motion: reduce)").matches ? "0" : "1") === "1", wi: Math.floor(Math.random() * 6),
   games: [], members: {}, cfg: {}, owned: {}, counts: {}, onlyOwned: ls.get("sp_onlyown","0")==="1", rawgKey: ls.get("sp_rawg", ""), upc: ls.get("sp_upc", ""),
   q: "", sort: ls.get("sp_sort", "recent"),
-  f: { platform: "", ownedBy: "", onOwned: "", year: "", publisher: "", genre: "", decade: "", sub: "", subName: "", notes: "", cover: "", addedBy: "" },
+  f: { format: "", platform: "", ownedBy: "", onOwned: "", year: "", publisher: "", genre: "", decade: "", sub: "", subName: "", notes: "", cover: "", addedBy: "" },
   version: "", syncAt: null, syncCache: false, syncMsg: "", advOpen: false, gotGames: false, view: ls.get("sp_view", "big"), cpage: 0, add: null, auto: null, versions: new Map(), unsub: [], gotMembers: false
 };
 if (!["library", "consoles", "profile", "settings"].includes(S.tab)) S.tab = "library";
@@ -769,7 +769,9 @@ const ownersOf = g => (Array.isArray(g.ownedBy) && g.ownedBy.length) ? g.ownedBy
 const ownerNames = g => ownersOf(g).map(personName).join(", ");
 /* Console devices: owned flag counts as one when no number is saved */
 const consoleCount = k => { if (!S.owned[k]) return 0; const n = parseInt(S.counts[k], 10); return n >= 1 ? n : 1; };
-const emptyFilters = () => ({ platform: "", ownedBy: "", onOwned: "", year: "", publisher: "", genre: "", decade: "", sub: "", subName: "", notes: "", cover: "", addedBy: "" });
+const FORMATS = { physical: "Physical", digital: "Digital" };
+const fmtOf = g => (g.format === "physical" || g.format === "digital") ? g.format : "";
+const emptyFilters = () => ({ format: "", platform: "", ownedBy: "", onOwned: "", year: "", publisher: "", genre: "", decade: "", sub: "", subName: "", notes: "", cover: "", addedBy: "" });
 const versionCount = g => (S.versions.get(g.titleKey) || []).length;
 
 const SORTS = {
@@ -796,6 +798,7 @@ function visibleGames() {
     if (f.publisher && g.publisher !== f.publisher) return false;
     if (f.sub === "sub" && !g.subscription) return false;
     if (f.sub === "own" && g.subscription) return false;
+    if (f.format === "unset" ? fmtOf(g) : (f.format && fmtOf(g) !== f.format)) return false;
     if (f.ownedBy && !ownersOf(g).includes(f.ownedBy)) return false;
     if (f.onOwned === "yes" && !consoleCount(g.platform)) return false;
     if (f.onOwned === "no" && consoleCount(g.platform)) return false;
@@ -917,6 +920,7 @@ function setView(v) {
 function filterLabel(k, v) {
   if (k === "platform") return (PLAT[v] || {}).l || v;
   if (k === "sub") return v === "sub" ? "Subscription only" : "Not subscription";
+  if (k === "format") return v === "unset" ? "Format not set" : FORMATS[v];
   if (k === "ownedBy") return "Owned by " + personName(v);
   if (k === "addedBy") return "Added by " + personName(v);
   if (k === "onOwned") return v === "yes" ? "On consoles I own" : "Not on consoles I own";
@@ -952,7 +956,7 @@ function openFilters() {
   const years = uniq(g.map(x => x.year ? String(x.year) : "")).sort((x, y) => y - x).map(x => [x, x]);
   const subs = uniq(g.map(x => x.subName)).sort().map(x => [x, x]);
   const yn = (id, label, yes, no) => sel(id, label, [["yes", yes], ["no", no]]);
-  const body = sel("f_platform", "Platform", plats) + sel("f_ownedBy", "Owned by", people) + yn("f_onOwned", "On consoles I own", "Only games on consoles I own", "Only games on consoles I do not own") +
+  const body = sel("f_format", "Format", [["physical", "Physical"], ["digital", "Digital"], ["unset", "Not set yet"]]) + sel("f_platform", "Platform", plats) + sel("f_ownedBy", "Owned by", people) + yn("f_onOwned", "On consoles I own", "Only games on consoles I own", "Only games on consoles I do not own") +
     sel("f_year", "Year", years) + sel("f_publisher", "Publisher", pubs) + sel("f_genre", "Genre", genres) + sel("f_decade", "Decade", decs) +
     sel("f_sub", "Subscription", [["sub", "Subscription only"], ["own", "Not subscription"]]) + (subs.length ? sel("f_subName", "Subscription name", subs) : "") +
     yn("f_notes", "Notes", "Has notes", "No notes") + yn("f_cover", "Cover image", "Has a cover", "No cover") + sel("f_addedBy", "Added by", people);
@@ -964,7 +968,7 @@ function openGame(id) {
   const g = S.games.find(x => x.id === id); if (!g) return;
   const p = PLAT[g.platform] || PLAT.other, others = (S.versions.get(g.titleKey) || []).filter(x => x.id !== g.id);
   const kv = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
-  const body = `<div class="big">${coverHtml(g)}</div><dl class="kv">${kv("Platform", esc(p.l))}${kv("Year", g.year || "")}${kv("Genres", esc((g.genres || []).join(", ")))}${kv("Publisher", esc(g.publisher || ""))}${kv("Subscription", g.subscription ? esc(g.subName || "Yes") : "")}${kv("Owned by", esc(ownerNames(g)))}${kv("Added", g.addedAt ? new Date(g.addedAt).toLocaleDateString("en-IE") : "")}${kv("Notes", esc(g.notes || ""))}</dl>${others.length ? `<div class="gname">Other versions</div>${others.map(o => `<button type="button" class="opt" data-action="open-game" data-id="${esc(o.id)}"><span>${esc((PLAT[o.platform] || PLAT.other).l)}</span><span>›</span></button>`).join("")}` : ""}`;
+  const body = `<div class="big">${coverHtml(g)}</div><dl class="kv">${kv("Platform", esc(p.l))}${kv("Year", g.year || "")}${kv("Genres", esc((g.genres || []).join(", ")))}${kv("Publisher", esc(g.publisher || ""))}${kv("Subscription", g.subscription ? esc(g.subName || "Yes") : "")}${kv("Format", FORMATS[fmtOf(g)] || "Not set")}${kv("Owned by", esc(ownerNames(g)))}${kv("Added", g.addedAt ? new Date(g.addedAt).toLocaleDateString("en-IE") : "")}${kv("Notes", esc(g.notes || ""))}</dl>${others.length ? `<div class="gname">Other versions</div>${others.map(o => `<button type="button" class="opt" data-action="open-game" data-id="${esc(o.id)}"><span>${esc((PLAT[o.platform] || PLAT.other).l)}</span><span>›</span></button>`).join("")}` : ""}`;
   openSheet(g.title, body, `<button type="button" class="btn danger" data-action="delete-game" data-id="${esc(g.id)}">Delete</button><button type="button" class="btn primary" data-action="edit-game" data-id="${esc(g.id)}">Edit</button>`);
 }
 function platOptionsHtml(sel, suggested = []) {
@@ -983,6 +987,7 @@ function formHtml(d) {
 <div class="field"><label for="f_genres">Genres (comma separated)</label><input id="f_genres" value="${esc(d.genres || "")}" autocomplete="off"></div>
 <div class="field"><label for="f_cover">Cover image link (optional)</label><input id="f_cover" value="${esc(d.cover || "")}" autocomplete="off" inputmode="url"></div>
 <div class="field"><label>Owned by</label><div class="owners">${HOUSEHOLD.map(u => `<label class="check"><input type="checkbox" name="owner" value="${u}"${(d.ownedBy || [me()]).includes(u) ? " checked" : ""}><span>${esc(personName(u))}</span></label>`).join("")}</div></div>
+<div class="field"><label>Format</label><div class="owners">${Object.entries(FORMATS).map(([k, l]) => `<label class="check"><input type="radio" name="format" value="${k}"${(d.format || "physical") === k ? " checked" : ""}><span>${l}</span></label>`).join("")}</div></div>
 <label class="check"><input type="checkbox" id="f_sub"${d.subscription ? " checked" : ""}><span>Subscription game (for example PS Plus)</span></label>
 <div class="field" id="subrow"${d.subscription ? "" : " hidden"}><label for="f_subname">Subscription name</label><input id="f_subname" list="sublist" value="${esc(d.subName || "")}" autocomplete="off"><datalist id="sublist"><option value="PS Plus"><option value="Game Pass"><option value="Nintendo Switch Online"><option value="EA Play"><option value="Ubisoft+"></datalist></div>
 <div class="field"><label for="f_notes">Notes</label><textarea id="f_notes">${esc(d.notes || "")}</textarea></div>
@@ -991,7 +996,7 @@ function formHtml(d) {
 const saveFoot = label => `<button type="button" class="btn ghost" data-action="close-sheet">Cancel</button><button type="button" class="btn primary" id="saveBtn" data-action="save-game">${label}</button>`;
 function readForm() {
   const v = id => (($("#" + id) || {}).value || "").trim();
-  return { title: v("f_title"), platform: v("f_platform"), year: v("f_year"), publisher: v("f_publisher"), genres: v("f_genres"), cover: v("f_cover"), subscription: !!($("#f_sub") || {}).checked, subName: v("f_subname"), notes: v("f_notes"), ownedBy: [...document.querySelectorAll("input[name=owner]:checked")].map(x => x.value) };
+  return { title: v("f_title"), platform: v("f_platform"), year: v("f_year"), publisher: v("f_publisher"), genres: v("f_genres"), cover: v("f_cover"), subscription: !!($("#f_sub") || {}).checked, subName: v("f_subname"), notes: v("f_notes"), ownedBy: [...document.querySelectorAll("input[name=owner]:checked")].map(x => x.value), format: (($("input[name=format]:checked") || {}).value) || "physical" };
 }
 function formMsg(text, kind = "bad") { const m = $("#formMsg"); if (m) m.innerHTML = text ? `<div class="msg ${kind}">${text}</div>` : ""; }
 
@@ -1000,7 +1005,7 @@ function openAdd(opts = {}) {
   S.add = { mode: "find", q: "", results: [], busy: false, msg: "", draft: null, editId: null, dupOk: false, token: 0 };
   if (editing) {
     S.add.mode = "form"; S.add.editId = editing.id;
-    S.add.draft = { title: editing.title, platform: editing.platform, year: editing.year || "", publisher: editing.publisher || "", genres: (editing.genres || []).join(", "), cover: editing.cover || "", subscription: !!editing.subscription, subName: editing.subName || "", notes: editing.notes || "", ownedBy: ownersOf(editing), rawgId: editing.rawgId || null };
+    S.add.draft = { title: editing.title, platform: editing.platform, year: editing.year || "", publisher: editing.publisher || "", genres: (editing.genres || []).join(", "), cover: editing.cover || "", subscription: !!editing.subscription, subName: editing.subName || "", notes: editing.notes || "", ownedBy: ownersOf(editing), format: fmtOf(editing) || "physical", rawgId: editing.rawgId || null };
   } else if (opts.platform) {
     S.add.presetPlatform = opts.platform;
   }
@@ -1189,7 +1194,7 @@ function saveGame() {
   }
   const data = {
     title: d.title, platform: d.platform, year, publisher: d.publisher, genres: d.genres.split(",").map(x => x.trim()).filter(Boolean),
-    cover: d.cover, subscription: d.subscription, subName: d.subscription ? d.subName : "", notes: d.notes, ownedBy: d.ownedBy,
+    cover: d.cover, subscription: d.subscription, subName: d.subscription ? d.subName : "", notes: d.notes, ownedBy: d.ownedBy, format: d.format,
     rawgId: (a.draft && a.draft.rawgId) || null
   };
   if (a.editId) {
@@ -1299,13 +1304,61 @@ async function syncNow() {
   S.syncMsg = ""; updateSyncLine();
 }
 
+/* ===================== FORMAT (physical or digital), bulk set and restore ===================== */
+const noFormat = () => S.games.filter(g => !fmtOf(g));
+const fmtInfoText = () => { const n = noFormat().length; return n ? `${n} ${n === 1 ? "game has" : "games have"} no format yet.` : "Every game has a format."; };
+function openBulkFormat() {
+  const n = noFormat().length;
+  const plats = PLATFORMS.filter(p => noFormat().some(g => g.platform === p.k));
+  const body = `<p>${esc(fmtInfoText())} You can still change any single game with Edit.</p>
+<div class="field"><label for="bk_scope">Which games</label><select id="bk_scope"><option value="unset">Games with no format (${n})</option><option value="all">All games (${S.games.length})</option></select></div>
+<div class="field"><label for="bk_plat">Only on platform</label><select id="bk_plat"><option value="">Any platform</option>${plats.map(p => `<option value="${p.k}">${esc(p.l)}</option>`).join("")}</select></div>
+<div id="bk_msg"></div>`;
+  openSheet("Set format on existing games", body, `<button type="button" class="btn" data-action="bulk-format" data-v="digital">Set Digital</button><button type="button" class="btn primary" data-action="bulk-format" data-v="physical">Set Physical</button>`);
+}
+function bulkFormat(v) {
+  if (!FORMATS[v]) return;
+  const scope = ($("#bk_scope") || {}).value, plat = ($("#bk_plat") || {}).value;
+  const list = S.games.filter(g => (scope === "all" || !fmtOf(g)) && (!plat || g.platform === plat) && fmtOf(g) !== v);
+  if (!list.length) { const m = $("#bk_msg"); if (m) m.innerHTML = `<div class="msg warn">No games to change with those choices.</div>`; return; }
+  list.forEach(g => updateDoc(doc(db, "games", g.id), { format: v }).catch(e => showErr("Save failed: " + e.message)));
+  closeSheet(); toast(`${list.length} ${list.length === 1 ? "game" : "games"} set to ${FORMATS[v]}`);
+}
+let restoreData = null;
+function restoreRead(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    let d; try { d = JSON.parse(r.result); } catch (e) { return toast("That file is not a SavePoint backup."); }
+    if (!d || d.app !== "SavePoint" || !Array.isArray(d.games)) return toast("That file is not a SavePoint backup.");
+    const have = new Set(S.games.map(g => g.id)), haveKey = new Set(S.games.map(g => norm(g.title) + "|" + g.platform));
+    const add = d.games.filter(g => g && g.title && g.platform && !(g.id && have.has(g.id)) && !haveKey.has(norm(g.title) + "|" + g.platform));
+    restoreData = add;
+    const body = `<p>The file has ${d.games.length} games. ${d.games.length - add.length} are already in your library and stay as they are. ${add.length} ${add.length === 1 ? "is" : "are"} missing and can be added back with the same owner, added by and format.</p>`;
+    openSheet("Restore from backup", body, add.length ? `<button type="button" class="btn ghost" data-action="close-sheet">Cancel</button><button type="button" class="btn primary" data-action="restore-go">Add ${add.length} ${add.length === 1 ? "game" : "games"}</button>` : `<button type="button" class="btn primary" data-action="close-sheet">Close</button>`);
+  };
+  r.readAsText(file);
+}
+function restoreGo() {
+  const list = restoreData || []; restoreData = null;
+  for (const g of list) {
+    const { id, _h, titleKey, ...rest } = g;
+    if (rest.format !== "physical" && rest.format !== "digital") delete rest.format;
+    if (!Array.isArray(rest.ownedBy) || !rest.ownedBy.length) delete rest.ownedBy;
+    if (rest.addedBy == null) delete rest.addedBy;
+    const op = id ? setDoc(doc(db, "games", id), rest) : addDoc(collection(db, "games"), rest);
+    op.catch(e => showErr("Restore failed: " + e.message));
+  }
+  closeSheet(); toast(`${list.length} ${list.length === 1 ? "game" : "games"} restored`);
+}
+
 /* ===================== SETTINGS ===================== */
 function settingsHtml() {
   const u = S.user;
   return bannerHtml("settings", "Settings", `SavePoint version <span id="ver">${esc(S.version || "…")}</span>`) + `<div class="set"><h3>Sync across devices</h3><p>Signed in as ${esc(u.displayName || "")} (${esc(u.email || "")}).</p>
 <p id="syncStatus">${esc(syncText())}</p>
-<div class="btns"><button type="button" class="btn sm primary" data-action="sync-now">Sync now</button><button type="button" class="btn sm" data-action="export">Export JSON backup</button><button type="button" class="btn sm" data-action="signout">Sign out</button></div>
+<div class="btns"><button type="button" class="btn sm primary" data-action="sync-now">Sync now</button><button type="button" class="btn sm" data-action="export">Export JSON backup</button><button type="button" class="btn sm" data-action="restore-pick">Restore from backup</button><input type="file" id="restorein" accept="application/json,.json" hidden><button type="button" class="btn sm" data-action="signout">Sign out</button></div>
 <p style="margin-top:10px">The backup saves all games, profile and owned consoles to a file on this device. If something looks old, close and reopen the app once.</p></div>
+<div class="set"><h3>Physical or digital</h3><p id="fmtInfo">${fmtInfoText()}</p><div class="btns"><button type="button" class="btn sm primary" data-action="open-bulk-format">Set format on existing games</button></div></div>
 <div class="set"><h3>Game database tools</h3><p>Automatic tools only fill empty fields and never change what you edited. Only exact title matches are used. They need the RAWG key under Advanced.</p>
 <div class="btns"><button type="button" class="btn sm" data-action="auto-covers">Assign covers automatically</button><button type="button" class="btn sm" data-action="auto-match">Match games with RAWG</button><button type="button" class="btn sm ghost" data-action="stop-auto">Stop</button></div>
 <p id="autoStatus" style="margin-top:8px"></p></div>
@@ -1387,7 +1440,7 @@ async function autoMatch(mode) {
   setStatus("autoStatus", `Done${stopped}: ${upd} updated, ${miss} left as they were (no exact match or nothing to add).`);
 }
 function exportJson() {
-  const data = { app: "SavePoint", version: S.version, exportedAt: new Date().toISOString(), games: S.games.map(g => { const { _h, titleKey, ...rest } = g; return { ...rest, ownedBy: ownersOf(g), addedBy: g.addedBy || null }; }), members: S.members, consolesOwned: S.owned, consoleCounts: Object.fromEntries(PLATFORMS.filter(p => consoleCount(p.k) > 0).map(p => [p.k, consoleCount(p.k)])) };
+  const data = { app: "SavePoint", version: S.version, exportedAt: new Date().toISOString(), games: S.games.map(g => { const { _h, titleKey, ...rest } = g; return { ...rest, ownedBy: ownersOf(g), addedBy: g.addedBy || null, format: fmtOf(g) || null }; }), members: S.members, consolesOwned: S.owned, consoleCounts: Object.fromEntries(PLATFORMS.filter(p => consoleCount(p.k) > 0).map(p => [p.k, consoleCount(p.k)])) };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
   a.download = `savepoint-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -1419,6 +1472,7 @@ function startListeners() {
     if (S.gotGames && snap.docChanges && !snap.docChanges().length) { updateSyncLine(); return; }
     S.gotGames = true;
     S.games = snap.docs.map(d => ({ id: d.id, ...d.data() })); rebuildIndex();
+    const fi = $("#fmtInfo"); if (fi) fi.textContent = fmtInfoText();
     if (S.tab === "library") updateLibrary(); else if (!sheetOpen()) renderView();
   }, fsError));
   S.unsub.push(onSnapshot(collection(db, "gamesMeta", "household", "members"), snap => {
@@ -1478,6 +1532,7 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("change", e => {
   const id = e.target && e.target.id;
+  if (id === "restorein") { const f = e.target.files && e.target.files[0]; if (f) restoreRead(f); e.target.value = ""; }
   if (id === "photoin") { const f = e.target.files && e.target.files[0]; if (f) handlePhoto(f, e.target.dataset.purpose); }
   if (id === "f_sub") { const r = $("#subrow"); if (r) r.hidden = !e.target.checked; }
   if (id === "f_platform" && S.add) { S.add.dupOk = false; const b = $("#saveBtn"); if (b) b.textContent = S.add.editId ? "Save changes" : "Save to library"; formMsg(""); }
@@ -1528,6 +1583,10 @@ function act(name, el) {
     case "auto-match": return autoMatch("match");
     case "stop-auto": if (S.auto) S.auto.stop = true; return;
     case "export": return exportJson();
+    case "restore-pick": { const i = $("#restorein"); if (i) i.click(); return; }
+    case "restore-go": return restoreGo();
+    case "open-bulk-format": return openBulkFormat();
+    case "bulk-format": return bulkFormat(el.dataset.v);
   }
 }
 
