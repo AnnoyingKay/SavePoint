@@ -24,16 +24,10 @@ button{cursor:pointer;border:0;background:none;padding:0}
 h1,h2,h3,p{margin:0}
 a{color:var(--accent)}
 
-/* error bar + debug */
+/* error bar */
 #errbar{position:fixed;top:0;left:0;right:0;z-index:99999;background:#c62828;color:#fff;padding:calc(8px + env(safe-area-inset-top)) 12px 8px;display:flex;gap:8px;align-items:flex-start;font:13px/1.35 system-ui,sans-serif}
 #errtxt{flex:1;word-break:break-word}
 #errbar button{background:#ffffff33;color:#fff;border-radius:8px;padding:4px 10px;font-size:13px}
-#dbg{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));z-index:99998;max-height:26dvh;opacity:.94;background:#000d;color:#9f9;font:11px/1.3 ui-monospace,Menlo,monospace;display:flex;flex-direction:column}
-@media(min-width:1100px){#dbg{bottom:0;left:220px}}
-#dbg .bar{display:flex;gap:6px;padding:4px 6px;background:#222;color:#fff}
-#dbg .bar button{background:#444;color:#fff;border-radius:6px;padding:2px 8px;font-size:11px}
-#dbg pre{margin:0;padding:4px 6px;overflow:auto;white-space:pre-wrap;word-break:break-all;flex:1}
-
 /* shell */
 #app{min-height:100dvh;display:flex}
 main{flex:1;min-width:0;padding-bottom:calc(var(--nav) + 24px + env(safe-area-inset-bottom))}
@@ -243,11 +237,44 @@ h1,h2,h3,.brand,.pname,.sbrand,.th .tn,.tog b{font-family:var(--fd);text-transfo
 .scanrow{display:flex;gap:8px;margin:2px 0 8px}.scanrow .btn{flex:1}
 #scanbox video{width:100%;max-height:260px;object-fit:cover;border-radius:var(--r);background:#000;margin-bottom:8px}
 
+/* v6 library views and settings */
+.vsw{display:flex;gap:4px;flex:none}
+.vsw button{width:38px;height:38px;border-radius:10px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;color:var(--muted)}
+.vsw button.on{background:var(--accent);color:var(--onacc);border-color:transparent}
+.vsw svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.searchrow .tbtn{min-width:80px}
+.grid.v-small{grid-template-columns:repeat(3,1fr);gap:8px}
+@media(min-width:640px){.grid.v-small{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:820px){.grid.v-small{grid-template-columns:repeat(5,1fr)}}
+@media(min-width:1100px){.grid.v-small{grid-template-columns:repeat(7,1fr)}}
+@media(min-width:1400px){.grid.v-small{grid-template-columns:repeat(8,1fr)}}
+.v-small .ctitle{font-size:12px}.v-small .cmeta{padding:6px 7px 8px}.v-small .tags,.v-small .crow span:not(.chip){display:none}
+.grid.v-list,.grid.v-listimg{grid-template-columns:1fr;gap:8px}
+@media(min-width:1100px){.grid.v-list,.grid.v-listimg{grid-template-columns:repeat(2,1fr)}}
+.v-list .card,.v-listimg .card{flex-direction:row;align-items:center}
+.v-list .cover{display:none}
+.v-listimg .cover{width:64px;height:64px;aspect-ratio:auto;flex:none}
+.v-list .cmeta,.v-listimg .cmeta{padding:8px 12px;flex:1;min-width:0}
+.adv summary{cursor:pointer;font-weight:700;font-size:16px;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.adv summary::-webkit-details-marker{display:none}
+.adv summary::after{content:"\25BE";color:var(--muted)}
+.adv[open] summary::after{content:"\25B4"}
+.adv .sub-h{font-size:15px;margin:14px 0 6px;font-weight:700}
+.uid{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;color:var(--text);background:var(--surface2);border-radius:8px;padding:6px 8px;display:block;margin-bottom:8px}
+
+/* v7 owned by and console counts */
+.owners{display:flex;flex-wrap:wrap;gap:4px 18px}
+.owners .check{margin-bottom:4px}
+.tag.own{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.sticker .by{width:auto;min-width:22px;padding:0 5px;height:22px;border-radius:11px}
+.stepper{display:inline-flex;align-items:center;gap:12px}
+.stepper b{min-width:1.5em;text-align:center;font-size:17px}
+
 </style>
 </head>
 <body>
 <script>
-/* Red error bar + optional ?debug=1 tap logger. Runs before the app so even load failures show. */
+/* Red error bar for real errors. Runs before the app so even load failures show. */
 (function(){
   var bar=null,msgs=[];
   function show(m){
@@ -262,7 +289,6 @@ h1,h2,h3,.brand,.pname,.sbrand,.th .tn,.tog b{font-family:var(--fd);text-transfo
       document.getElementById('errcopy').onclick=function(){try{navigator.clipboard.writeText(msgs.join('\n'))}catch(e){}};
     }
     document.getElementById('errtxt').textContent='Error: '+msgs[msgs.length-1]+(msgs.length>1?'  (+'+(msgs.length-1)+' more)':'');
-    if(window.__spLog)window.__spLog('ERROR '+m);
   }
   window.__spErr=show;
   window.addEventListener('error',function(e){
@@ -277,47 +303,6 @@ h1,h2,h3,.brand,.pname,.sbrand,.th .tn,.tog b{font-family:var(--fd);text-transfo
   window.addEventListener('unhandledrejection',function(e){
     var r=e.reason;show('Promise: '+(r&&r.message?r.message:String(r)));
   });
-  if(/[?&]debug=1/.test(location.search)){
-    var lines=[],pre,panel;
-    function build(){
-      panel=document.createElement('div');panel.id='dbg';
-      panel.innerHTML='<div class="bar"><b>debug</b><button type="button" data-d="copy">Copy</button><button type="button" data-d="clear">Clear</button><button type="button" data-d="hide">Hide</button></div><pre></pre>';
-      document.body.appendChild(panel);pre=panel.querySelector('pre');
-      panel.addEventListener('click',function(e){
-        var d=e.target.getAttribute&&e.target.getAttribute('data-d');
-        if(d==='clear'){lines=[];pre.textContent=''}
-        if(d==='copy'){try{navigator.clipboard.writeText(lines.join('\n'))}catch(x){}}
-        if(d==='hide'){panel.remove();panel=null}
-        e.stopPropagation();
-      },true);
-    }
-    window.__spLog=function(t){
-      var s=new Date().toISOString().slice(11,23)+' '+t;lines.push(s);if(lines.length>300)lines.shift();
-      if(!document.body)return;
-      if(!panel)return;
-      pre.textContent=lines.join('\n');pre.scrollTop=pre.scrollHeight;
-    };
-    function desc(el){
-      if(!el||!el.tagName)return '?';
-      var s=el.tagName.toLowerCase();
-      if(el.id)s+='#'+el.id;
-      if(el.className&&typeof el.className==='string')s+='.'+el.className.trim().split(/\s+/).slice(0,2).join('.');
-      var a=el.attributes;
-      for(var i=0;i<a.length;i++){if(a[i].name.indexOf('data-')===0)s+='['+a[i].name+'='+a[i].value+']'}
-      var tx=(el.textContent||'').trim().replace(/\s+/g,' ').slice(0,28);
-      return s+(tx?' "'+tx+'"':'');
-    }
-    document.addEventListener('DOMContentLoaded',function(){
-      build();window.__spLog('debug on. UA '+navigator.userAgent.slice(0,80));
-    });
-    ['click','pointerdown'].forEach(function(ev){
-      document.addEventListener(ev,function(e){
-        if(e.target&&e.target.closest&&e.target.closest('#dbg'))return;
-        var t=e.target,c=t.closest?t.closest('button,[data-action],[data-tab],a,input,select,textarea,label'):null;
-        window.__spLog(ev+' '+desc(c||t)+(c&&c!==t?' (hit <'+(t.tagName||'?').toLowerCase()+'>)':'')+' @'+Math.round(e.clientX)+','+Math.round(e.clientY));
-      },true);
-    });
-  }
 })();
 </script>
 <div id="app">
@@ -330,6 +315,7 @@ h1,h2,h3,.brand,.pname,.sbrand,.th .tn,.tog b{font-family:var(--fd);text-transfo
           <input id="q" type="search" placeholder="Search title, platform, genre, publisher" autocomplete="off" enterkeyhint="search">
           <button type="button" class="tbtn" id="sortBtn" data-action="open-sort">Sort</button>
           <button type="button" class="tbtn" id="filterBtn" data-action="open-filters">Filters</button>
+          <div class="vsw" id="vsw" role="group" aria-label="Library view"></div>
         </div>
       </div>
     </header>
@@ -342,11 +328,9 @@ h1,h2,h3,.brand,.pname,.sbrand,.th .tn,.tog b{font-family:var(--fd);text-transfo
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, addDoc, setDoc, updateDoc, deleteDoc, getDocsFromServer, waitForPendingWrites } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 /* ===================== CONFIG ===================== */
-const APP_VERSION = 5;
-
 /* PASTE: copy the same firebaseConfig block from your Musicbox index.html (search for "firebaseConfig"). */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCgVHwUEbDsp_DiyAWbIaHW7b5LS7MRwNM",
@@ -373,7 +357,6 @@ const ls = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 };
 const showErr = m => { (window.__spErr || console.error)(m); };
-const log = m => { if (window.__spLog) window.__spLog(m); };
 const initials = t => {
   const w = String(t || "?").replace(/[^A-Za-z0-9 ]+/g, " ").trim().split(/\s+/).filter(Boolean);
   return (w.length > 1 ? w.slice(0, 3).map(x => x[0]).join("") : (w[0] || "?").slice(0, 2)).toUpperCase();
@@ -603,6 +586,75 @@ const ART = {
 
 ART.deepblue = ART.ocean; ART.neonduo = ART.neon; ART.emerald = ART.circuit; ART.handheld = ART.pixel;
 
+/* ---- Part 3: four more worlds, original art ---- */
+ART.playground = (w, h, an) => {
+  const R = rng(311), m = Math.min(w, h);
+  const d = lin("sk", [[0, "#bfe6ff"], [.6, "#e6f6ff"], [1, "#fff4fb"]]);
+  let b = `<rect width="${w}" height="${h}" fill="url(#sk)"/>`;
+  const cloud = (x, y, s, dur) => `<g opacity=".95">${an ? `<animateTransform attributeName="transform" type="translate" values="0 0;${n1(w * .06)} 0;0 0" dur="${dur}s" repeatCount="indefinite"/>` : ""}<g fill="#fff"><circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(s)}"/><circle cx="${n1(x + s * 1.1)}" cy="${n1(y - s * .35)}" r="${n1(s * 1.2)}"/><circle cx="${n1(x + s * 2.3)}" cy="${n1(y)}" r="${n1(s * .95)}"/><rect x="${n1(x)}" y="${n1(y)}" width="${n1(s * 2.3)}" height="${n1(s * .95)}"/></g></g>`;
+  for (let i = 0; i < 5; i++) b += cloud(R() * w * .9, h * (.08 + R() * .4), m * (.035 + R() * .03), n1(30 + R() * 25));
+  const cols = ["#ff8fb8", "#ffd166", "#7fd8be", "#8ab6ff", "#c9a7ff"];
+  for (let i = 0; i < 16; i++) {
+    const x = R() * w, y = R() * h * .65, s = m * (.012 + R() * .02), c = cols[i % 5], k = i % 3, rot = Math.round(R() * 60);
+    const shape = k === 0 ? `<circle r="${n1(s)}" fill="${c}"/>` : k === 1 ? `<polygon points="0,${n1(-s * 1.2)} ${n1(s * 1.1)},${n1(s)} ${n1(-s * 1.1)},${n1(s)}" fill="${c}"/>` : `<path d="M0 ${n1(-s * 1.3)} L${n1(s * .4)} ${n1(-s * .4)} L${n1(s * 1.3)} 0 L${n1(s * .4)} ${n1(s * .4)} L0 ${n1(s * 1.3)} L${n1(-s * .4)} ${n1(s * .4)} L${n1(-s * 1.3)} 0 L${n1(-s * .4)} ${n1(-s * .4)}Z" fill="${c}"/>`;
+    b += `<g transform="translate(${n1(x)} ${n1(y)}) rotate(${rot})" opacity=".85">${an ? `<animateTransform attributeName="transform" type="translate" additive="sum" values="0 0;0 ${n1(-m * .02)};0 0" dur="${n1(4 + R() * 4)}s" repeatCount="indefinite"/>` : ""}${shape}</g>`;
+  }
+  const hill = (base, amp, ph, fill) => { let p = `M0 ${h}`; for (let x = 0; x <= w + 10; x += 10) p += ` L${x} ${n1(base + Math.sin(x / w * 6 + ph) * amp)}`; return `<path d="${p} L${w} ${h}Z" fill="${fill}"/>`; };
+  b += hill(h * .72, h * .03, 1, "#c8f0d8") + hill(h * .82, h * .035, 3, "#9fe0c0") + hill(h * .92, h * .025, 5, "#7fd0ac");
+  return { d, b };
+};
+ART.parchment = (w, h, an) => {
+  const R = rng(523), m = Math.min(w, h);
+  const d = `<radialGradient id="pg" cx=".5" cy=".4" r=".8"><stop offset="0" stop-color="#f7eed6"/><stop offset="1" stop-color="#dcc79a"/></radialGradient>` + lin("st", [[0, "#6f665a"], [1, "#4a423a"]]) + `<radialGradient id="gl" cx=".5" cy="1" r="1"><stop offset="0" stop-color="#ff8a3d" stop-opacity=".55"/><stop offset="1" stop-color="#ff8a3d" stop-opacity="0"/></radialGradient>`;
+  let b = `<rect width="${w}" height="${h}" fill="url(#pg)"/>`;
+  for (let i = 0; i < 26; i++) b += `<ellipse cx="${n1(R() * w)}" cy="${n1(R() * h)}" rx="${n1(m * (.03 + R() * .08))}" ry="${n1(m * (.02 + R() * .05))}" fill="#a9803f" opacity="${n1(.03 + R() * .06)}"/>`;
+  b += `<rect x="3" y="3" width="${w - 6}" height="${h - 6}" fill="none" stroke="#8a5a2b" stroke-width="3" opacity=".35"/>`;
+  b += `<rect x="0" y="${n1(h * .55)}" width="${w}" height="${n1(h * .45)}" fill="url(#gl)"/>`;
+  const aw = m * .22, base = h;
+  for (let x = -aw * .3, i = 0; x < w; x += aw * 1.15, i++) {
+    const ah = h * (.2 + (i % 3) * .06);
+    b += `<path d="M${n1(x)} ${base} V${n1(base - ah)} Q${n1(x + aw / 2)} ${n1(base - ah - aw * .55)} ${n1(x + aw)} ${n1(base - ah)} V${base}Z" fill="url(#st)" opacity=".9"/><path d="M${n1(x + aw * .2)} ${base} V${n1(base - ah * .85)} Q${n1(x + aw / 2)} ${n1(base - ah * .85 - aw * .4)} ${n1(x + aw * .8)} ${n1(base - ah * .85)} V${base}Z" fill="#2c2620" opacity=".75"/>`;
+  }
+  for (let i = 0; i < 22; i++) {
+    const x = R() * w, y = h * (.5 + R() * .45), r = 1.2 + R() * 2.2, du = n1(5 + R() * 6);
+    b += `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(r)}" fill="${i % 2 ? "#ff7a2e" : "#ffc04d"}" opacity=".85">${an ? `<animate attributeName="cy" values="${n1(y)};${n1(y - h * .35)}" dur="${du}s" repeatCount="indefinite"/><animate attributeName="opacity" values=".9;0" dur="${du}s" repeatCount="indefinite"/>` : ""}</circle>`;
+  }
+  return { d, b };
+};
+ART.sandy = (w, h, an) => {
+  const R = rng(719), m = Math.min(w, h);
+  const d = lin("sd", [[0, "#f8edc9"], [1, "#e9d49c"]]) + `<radialGradient id="sn" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd04a"/><stop offset="1" stop-color="#ffd04a" stop-opacity="0"/></radialGradient>`;
+  let b = `<rect width="${w}" height="${h}" fill="url(#sd)"/>`;
+  for (let k = 0; k < 7; k++) { let p = ""; const y0 = h * (.1 + k * .11), ph = k * .9; for (let x = 0; x <= w + 12; x += 12) p += (x ? " L" : "M") + x + " " + n1(y0 + Math.sin(x / w * 5 + ph) * h * .035 + Math.cos(x / w * 11 + ph) * h * .012); b += `<path d="${p}" fill="none" stroke="#a88a4a" stroke-width="1.4" opacity=".28"/>`; }
+  const sx = w * .82, sy = h * .13, sr = m * .2;
+  b += `<circle cx="${n1(sx)}" cy="${n1(sy)}" r="${n1(sr)}" fill="url(#sn)">${pulse(an, "opacity", ".9;1;.85;1;.9", 6)}</circle><circle cx="${n1(sx)}" cy="${n1(sy)}" r="${n1(sr * .38)}" fill="#ffc933"/>`;
+  let tp = `M${n1(w * .06)} ${n1(h * .62)}`; for (let i = 1; i <= 6; i++) tp += ` Q${n1(w * (.06 + i * .13 - .05))} ${n1(h * (.62 + (i % 2 ? -.18 : .12)))} ${n1(w * (.06 + i * .13))} ${n1(h * (.55 + Math.sin(i) * .12))}`;
+  b += `<path d="${tp}" fill="none" stroke="#b5532f" stroke-width="${n1(Math.max(2, m * .007))}" stroke-dasharray="${n1(m * .02)} ${n1(m * .016)}" stroke-linecap="round" opacity=".75">${an ? `<animate attributeName="stroke-dashoffset" values="0;${n1(-m * .072)}" dur="3s" repeatCount="indefinite"/>` : ""}</path>`;
+  const xx = w * .84, xy = h * .56, xs = m * .035;
+  b += `<path d="M${n1(xx - xs)} ${n1(xy - xs)} L${n1(xx + xs)} ${n1(xy + xs)} M${n1(xx + xs)} ${n1(xy - xs)} L${n1(xx - xs)} ${n1(xy + xs)}" stroke="#b5532f" stroke-width="${n1(m * .012)}" stroke-linecap="round"/>`;
+  b += `<g fill="#2f6b3a">`;
+  const leaf = (x, y, len, ang, o) => `<path transform="translate(${n1(x)} ${n1(y)}) rotate(${ang})" d="M0 0 Q${n1(len * .35)} ${n1(-len * .22)} ${n1(len)} 0 Q${n1(len * .35)} ${n1(len * .16)} 0 0Z" opacity="${o}"/>`;
+  for (const [cx, dir] of [[0, 1], [w, -1]]) for (let i = 0; i < 9; i++) b += leaf(cx, h * (.62 + R() * .38), m * (.18 + R() * .22), (dir > 0 ? -30 : -150) + (R() * 50 - 25), n1(.55 + R() * .4));
+  b += `</g>`;
+  b += `<rect y="${n1(h * .94)}" width="${w}" height="${n1(h * .06)}" fill="#2f6b3a" opacity=".85"/>`;
+  return { d, b };
+};
+ART.deco = (w, h, an) => {
+  const R = rng(907), m = Math.min(w, h);
+  const d = lin("dk", [[0, "#04302f"], [1, "#021514"]]) + `<radialGradient id="ra" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#d4a64a" stop-opacity=".5"/><stop offset="1" stop-color="#d4a64a" stop-opacity="0"/></radialGradient>`;
+  let b = `<rect width="${w}" height="${h}" fill="url(#dk)"/>`;
+  for (let x = 0; x < w; x += m * .06) b += `<rect x="${n1(x)}" y="0" width="1.2" height="${h}" fill="#d4a64a" opacity=".07"/>`;
+  const cx = w * .5, cy = h * .62, rr = Math.hypot(w, h);
+  b += `<circle cx="${n1(cx)}" cy="${n1(cy)}" r="${n1(m * .6)}" fill="url(#ra)"/>`;
+  for (let i = 0; i < 17; i++) { const a = Math.PI + (i / 16) * Math.PI; b += `<line x1="${n1(cx)}" y1="${n1(cy)}" x2="${n1(cx + Math.cos(a) * rr)}" y2="${n1(cy + Math.sin(a) * rr)}" stroke="#d4a64a" stroke-width="${i % 2 ? 1 : 2.2}" opacity="${i % 2 ? .16 : .26}"/>`; }
+  for (let k = 1; k <= 4; k++) b += `<path d="M${n1(cx - m * .16 * k)} ${n1(cy)} A${n1(m * .16 * k)} ${n1(m * .16 * k)} 0 0 1 ${n1(cx + m * .16 * k)} ${n1(cy)}" fill="none" stroke="#d4a64a" stroke-width="1.6" opacity="${n1(.42 - k * .06)}"/>`;
+  let sk = ""; const bw = m * .09;
+  for (let x = 0, i = 0; x < w; x += bw + 3, i++) { const bh = h * (.14 + ((i * 53) % 24) / 100); sk += `<path d="M${n1(x)} ${h} V${n1(h - bh)} L${n1(x + bw / 2)} ${n1(h - bh - bw * .5)} L${n1(x + bw)} ${n1(h - bh)} V${h}Z" fill="#021a19"/>`; }
+  b += `<g opacity=".95">${sk}</g><rect y="${n1(h * .97)}" width="${w}" height="${n1(h * .03)}" fill="#d4a64a" opacity=".6"/>`;
+  for (let i = 0; i < 20; i++) { const x = R() * w, y = h * (.3 + R() * .7), r = 1.5 + R() * 4, du = n1(6 + R() * 8); b += `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(r)}" fill="none" stroke="#9fe6d8" stroke-width="1.2" opacity=".45">${an ? `<animate attributeName="cy" values="${n1(y)};${n1(y - h * .5)}" dur="${du}s" repeatCount="indefinite"/><animate attributeName="opacity" values=".5;0" dur="${du}s" repeatCount="indefinite"/>` : ""}</circle>`; }
+  return { d, b };
+};
+
 const MOTIF = {
   library: (a) => {
     let s = "";
@@ -625,42 +677,55 @@ const thumbUrl = id => cached(`th|${id}`, () => dataUrl(sceneSvg(id, 320, 180, f
 const SERIF = "Georgia,'Times New Roman',serif", PAL = "'Palatino Linotype',Palatino,Georgia,serif", SANS = "'Trebuchet MS','Segoe UI',system-ui,sans-serif";
 const BLACK = "'Arial Black','Helvetica Neue',Impact,system-ui,sans-serif", MONO = "ui-monospace,'SF Mono','Courier New',monospace", COUR = "'Courier New',ui-monospace,monospace";
 const THEMES = [
-  { id: "crystal", g: "Fantasy", name: "Crystal Realm", tag: "Every game, kept safe.", sym: "◆", fd: SERIF, rad: 18, glow: "0 0 22px #7fd4ff22",
+  { id: "crystal", app: "Crystal Vault", g: "Fantasy", name: "Crystal Realm", tag: "Every game, kept safe.", sym: "◆", fd: SERIF, rad: 18, glow: "0 0 22px #7fd4ff22",
     greets: ["The crystals are glowing, {n}.", "Welcome back to the Realm, {n}.", "Your collection shimmers, {n}.", "The airships are docked, {n}.", "Another night under the moon, {n}.", "Step into the light, {n}."],
     c: { bg: "#0d1030", surface: "#171b4a", surface2: "#20266a", text: "#eef1ff", muted: "#9aa3d9", accent: "#7fd4ff", accent2: "#b388ff", onacc: "#07102a" } },
-  { id: "sakura", g: "Fantasy", name: "Sakura Dusk", tag: "A quiet garden for your games.", sym: "✿", fd: PAL, rad: 20, glow: "0 0 20px #ff8fb822",
+  { id: "sakura", app: "Petal Archive", g: "Fantasy", name: "Sakura Dusk", tag: "A quiet garden for your games.", sym: "✿", fd: PAL, rad: 20, glow: "0 0 20px #ff8fb822",
     greets: ["Petals are falling, {n}.", "A quiet evening, {n}.", "Lanterns lit, {n}.", "The garden is open, {n}.", "Spring never ends here, {n}.", "Welcome home, {n}."],
     c: { bg: "#241329", surface: "#36203d", surface2: "#4a2a52", text: "#ffeaf3", muted: "#d6a8c0", accent: "#ff8fb8", accent2: "#ffd1e3", onacc: "#2a0f1c" } },
-  { id: "deepblue", g: "Consoles", name: "Deep Current", tag: "Next generation, neatly shelved.", sym: "▲", fd: SANS, rad: 16, glow: "none",
+  { id: "deepblue", app: "Current Cabinet", g: "Consoles", name: "Deep Current", tag: "Next generation, neatly shelved.", sym: "▲", fd: SANS, rad: 16, glow: "none",
     greets: ["Diving back in, {n}.", "All quiet in the deep, {n}.", "The currents are calm, {n}.", "Surface to seabed, all shelved, {n}.", "The tide brought you back, {n}.", "Lights low, {n}. Everything is here."],
     c: { bg: "#00122e", surface: "#07224d", surface2: "#0d3170", text: "#f2f6ff", muted: "#8fb0e6", accent: "#2f8cff", accent2: "#e6f0ff", onacc: "#001533" } },
-  { id: "neonduo", g: "Consoles", name: "Neon Arcade", tag: "Two pads, one shelf.", sym: "◐", fd: BLACK, tt: "uppercase", ls: ".04em", rad: 10, glow: "0 0 18px #ff4d5e44",
+  { id: "neonduo", app: "Neon Cabinet", g: "Consoles", name: "Neon Arcade", tag: "Two pads, one shelf.", sym: "◐", fd: BLACK, tt: "uppercase", ls: ".04em", rad: 10, glow: "0 0 18px #ff4d5e44",
     greets: ["Lights are on, {n}.", "The arcade is open late, {n}.", "Neon never sleeps, {n}.", "Night shift at the shelf, {n}.", "Tonight's lineup is yours, {n}.", "Good to see you, {n}."],
     c: { bg: "#14141c", surface: "#1f1f2b", surface2: "#2c2c3e", text: "#ffffff", muted: "#a5a5c0", accent: "#ff4d5e", accent2: "#2fd0ff", onacc: "#1a0508" } },
-  { id: "emerald", g: "Consoles", name: "Emerald Circuit", tag: "Dark, green and organised.", sym: "⬢", fd: MONO, rad: 6, glow: "0 0 16px #3ddc4a33",
+  { id: "emerald", app: "Circuit Crate", g: "Consoles", name: "Emerald Circuit", tag: "Dark, green and organised.", sym: "⬢", fd: MONO, rad: 6, glow: "0 0 16px #3ddc4a33",
     greets: ["System online, {n}.", "All nodes connected, {n}.", "Power steady, {n}.", "Signal strong, {n}.", "Library mounted, {n}.", "Ready when you are, {n}."],
     c: { bg: "#070b07", surface: "#101a10", surface2: "#1a2c1a", text: "#eaffea", muted: "#8fb88f", accent: "#3ddc4a", accent2: "#b8ffb0", onacc: "#04140a" } },
-  { id: "steel", g: "Consoles", name: "Steel Sky", tag: "The big library, tidy at last.", sym: "▣", fd: SANS, tt: "uppercase", ls: ".06em", rad: 8, glow: "none",
+  { id: "steel", app: "Steel Stacks", g: "Consoles", name: "Steel Sky", tag: "The big library, tidy at last.", sym: "▣", fd: SANS, tt: "uppercase", ls: ".06em", rad: 8, glow: "none",
     greets: ["Skyline is clear, {n}.", "Rain on the glass, {n}. Shelves are dry.", "All floors accounted for, {n}.", "Library open, {n}.", "Grey day, bright shelves, {n}.", "Welcome to the tower, {n}."],
     c: { bg: "#10171e", surface: "#1b2631", surface2: "#26364a", text: "#e8f1f8", muted: "#8da2b5", accent: "#66c0f4", accent2: "#c7d5e0", onacc: "#08141c" } },
-  { id: "cosy", g: "Cosy and retro", name: "Cosy Night", tag: "Warm lamp, full shelves.", sym: "☕", fd: SERIF, rad: 16, glow: "0 0 18px #ffb34722",
+  { id: "cosy", app: "Cosy Corner", g: "Cosy and retro", name: "Cosy Night", tag: "Warm lamp, full shelves.", sym: "☕", fd: SERIF, rad: 16, glow: "0 0 18px #ffb34722",
     greets: ["Kettle's on, {n}.", "The fire is low and warm, {n}.", "Another cosy night, {n}.", "Shelves are dusted, {n}.", "Rain at the window, {n}. Stay a while.", "Welcome in, {n}."],
     c: { bg: "#1c1410", surface: "#2c2019", surface2: "#3d2c22", text: "#fff1de", muted: "#c9a98a", accent: "#ffb347", accent2: "#ffd9a0", onacc: "#2a1600" } },
-  { id: "handheld", g: "Cosy and retro", name: "Pixel Handheld", tag: "Four shades of nostalgia.", sym: "▦", fd: COUR, rad: 3, glow: "none", light: true,
+  { id: "handheld", app: "Pocket Cartridge", g: "Cosy and retro", name: "Pixel Handheld", tag: "Four shades of nostalgia.", sym: "▦", fd: COUR, rad: 3, glow: "none", light: true, ink: "#0f380f", shadeC: "#e8f2b8",
     greets: ["Batteries charged, {n}.", "Four shades, all yours, {n}.", "Backlight on, {n}.", "Cartridges in order, {n}.", "Welcome back, {n}.", "Low battery? Never, {n}."],
-    c: { bg: "#d4e2a2", surface: "#c2d684", surface2: "#aec468", text: "#0f380f", muted: "#3f6a2a", accent: "#306230", accent2: "#0f380f", onacc: "#e8f2b8" } }
+    c: { bg: "#d4e2a2", surface: "#c2d684", surface2: "#aec468", text: "#0f380f", muted: "#3f6a2a", accent: "#306230", accent2: "#0f380f", onacc: "#e8f2b8" } },
+  { id: "playground", app: "Cloud Cabinet", g: "Light worlds", name: "Pastel Playground", tag: "Bright, soft and a little silly.", sym: "✦", fd: SANS, rad: 22, glow: "0 4px 18px #5b8fd422", light: true, ink: "#1d2a4a", shadeC: "#ffffff",
+    greets: ["Sun's out, {n}!", "Clouds are friendly today, {n}.", "Playtime, {n}.", "Everything is tidy and bright, {n}.", "Welcome back, {n}.", "Big smiles, small shelves, {n}."],
+    c: { bg: "#e8f5ff", surface: "#ffffff", surface2: "#d9ecff", text: "#1d2a4a", muted: "#566489", accent: "#2468c9", accent2: "#ff7aa8", onacc: "#ffffff" } },
+  { id: "parchment", app: "The Ember Codex", g: "Light worlds", name: "Parchment and Embers", tag: "Old stone, warm light, fresh ink.", sym: "❦", fd: SERIF, rad: 10, glow: "none", light: true, ink: "#3a2414", shadeC: "#f3e6c6",
+    greets: ["The hearth is lit, {n}.", "Ink is dry, {n}.", "A scroll for every game, {n}.", "Embers still glow, {n}.", "Welcome to the hall, {n}.", "The archive is open, {n}."],
+    c: { bg: "#f1e5c8", surface: "#f9f0da", surface2: "#e4d3ab", text: "#3a2414", muted: "#7a5a3c", accent: "#a8331f", accent2: "#6b6256", onacc: "#fff4e0" } },
+  { id: "sandy", app: "Trail Ledger", g: "Light worlds", name: "Sandy Trails", tag: "Mark the spot, keep the map.", sym: "✕", fd: PAL, rad: 12, glow: "none", light: true, ink: "#2b3a1f", shadeC: "#f6ecce",
+    greets: ["X marks the shelf, {n}.", "Trail is clear, {n}.", "Sun is high, {n}.", "Map unrolled, {n}.", "Jungle quiet, {n}. All shelved.", "Ready for the next trip, {n}."],
+    c: { bg: "#f3e7c6", surface: "#fbf4de", surface2: "#e7d6a8", text: "#2b3a1f", muted: "#66673f", accent: "#2b6a37", accent2: "#c98a12", onacc: "#ffffff" } },
+  { id: "deco", app: "The Brass Hall", g: "Deco", name: "Brass and Teal", tag: "A grand hall for your games.", sym: "◈", fd: PAL, tt: "uppercase", ls: ".08em", rad: 6, glow: "0 0 18px #d4a64a1f",
+    greets: ["Good evening, {n}.", "The hall is lit, {n}.", "Brass polished, {n}.", "Please, come in, {n}.", "The tide is calm, {n}.", "Everything in its place, {n}."],
+    c: { bg: "#04201f", surface: "#0a3331", surface2: "#124744", text: "#f5ebc9", muted: "#9fc2b4", accent: "#d4a64a", accent2: "#3fb8a8", onacc: "#1a1203" } }
 ];
 const THEME = Object.fromEntries(THEMES.map(t => [t.id, t]));
-const THEME_GROUPS = ["Fantasy", "Consoles", "Cosy and retro"];
+const THEME_GROUPS = ["Fantasy", "Consoles", "Cosy and retro", "Light worlds", "Deco"];
 
 function applyTheme(id) {
   const t = THEME[id] || THEME.crystal, r = document.documentElement.style, c = t.c;
   [["--bg", c.bg], ["--surface", c.surface], ["--surface2", c.surface2], ["--text", c.text], ["--muted", c.muted], ["--accent", c.accent], ["--accent2", c.accent2], ["--onacc", c.onacc],
     ["--fd", t.fd], ["--tt", t.tt || "none"], ["--ls", t.ls || "normal"], ["--r", t.rad + "px"], ["--glow", t.glow || "none"],
-    ["--veil", c.bg + (t.light ? "d0" : "bd")], ["--border", t.light ? "#0f380f40" : "#ffffff24"], ["--bt", t.light ? "#0f380f" : "#ffffff"], ["--ts", t.light ? "0 1px 0 #ffffff99" : "0 2px 12px #000a"],
-    ["--shade", t.light ? "linear-gradient(90deg,#e8f2b8ee,#e8f2b800 80%)" : "linear-gradient(90deg,#000000d0,#00000000 80%)"]
+    ["--veil", c.bg + (t.light ? "d0" : "bd")], ["--border", t.light ? (t.ink || "#0f380f") + "40" : "#ffffff24"], ["--bt", t.light ? (t.ink || "#0f380f") : "#ffffff"], ["--ts", t.light ? "0 1px 0 #ffffff99" : "0 2px 12px #000a"],
+    ["--shade", t.light ? `linear-gradient(90deg,${t.shadeC || "#e8f2b8"}ee,${t.shadeC || "#e8f2b8"}00 80%)` : "linear-gradient(90deg,#000000d0,#00000000 80%)"]
   ].forEach(([k, v]) => r.setProperty(k, v));
   S.theme = t.id; ls.set("sp_theme", t.id);
+  document.title = t.app; const bn = $("#brand span"); if (bn) bn.textContent = t.app; const sb = $(".sbrand span"); if (sb) sb.textContent = t.app;
   paintBackdrop();
 }
 function paintBackdrop() {
@@ -673,10 +738,10 @@ function paintBackdrop() {
 /* ===================== STATE ===================== */
 const S = {
   user: null, tab: ls.get("sp_tab", "library"), theme: ls.get("sp_theme", "crystal"), art: ls.get("sp_art", "1") !== "0", motion: ls.get("sp_motion", matchMedia("(prefers-reduced-motion: reduce)").matches ? "0" : "1") === "1", wi: Math.floor(Math.random() * 6),
-  games: [], members: {}, cfg: {}, owned: {}, rawgKey: ls.get("sp_rawg", ""), upc: ls.get("sp_upc", ""),
+  games: [], members: {}, cfg: {}, owned: {}, counts: {}, onlyOwned: ls.get("sp_onlyown","0")==="1", rawgKey: ls.get("sp_rawg", ""), upc: ls.get("sp_upc", ""),
   q: "", sort: ls.get("sp_sort", "recent"),
-  f: { platform: "", genre: "", decade: "", publisher: "", sub: "" },
-  cpage: 0, add: null, auto: null, versions: new Map(), unsub: [], gotMembers: false
+  f: { platform: "", ownedBy: "", onOwned: "", year: "", publisher: "", genre: "", decade: "", sub: "", subName: "", notes: "", cover: "", addedBy: "" },
+  version: "", syncAt: null, syncCache: false, syncMsg: "", advOpen: false, gotGames: false, view: ls.get("sp_view", "big"), cpage: 0, add: null, auto: null, versions: new Map(), unsub: [], gotMembers: false
 };
 if (!["library", "consoles", "profile", "settings"].includes(S.tab)) S.tab = "library";
 let app, auth, db;
@@ -698,6 +763,13 @@ function rebuildIndex() {
     g._h = norm([g.title, p.l, p.s, (g.genres || []).join(" "), g.publisher, g.year, g.subName, g.subscription ? "subscription" : "" ].join(" "));
   }
 }
+/* Owned by: array of user IDs. Games without it count as owned by addedBy. */
+const HOUSEHOLD = Object.keys(PEOPLE);
+const ownersOf = g => (Array.isArray(g.ownedBy) && g.ownedBy.length) ? g.ownedBy : (g.addedBy ? [g.addedBy] : []);
+const ownerNames = g => ownersOf(g).map(personName).join(", ");
+/* Console devices: owned flag counts as one when no number is saved */
+const consoleCount = k => { if (!S.owned[k]) return 0; const n = parseInt(S.counts[k], 10); return n >= 1 ? n : 1; };
+const emptyFilters = () => ({ platform: "", ownedBy: "", onOwned: "", year: "", publisher: "", genre: "", decade: "", sub: "", subName: "", notes: "", cover: "", addedBy: "" });
 const versionCount = g => (S.versions.get(g.titleKey) || []).length;
 
 const SORTS = {
@@ -708,6 +780,8 @@ const SORTS = {
   yearnew: ["Year, newest first", (a, b) => (b.year || 0) - (a.year || 0) || a.titleKey.localeCompare(b.titleKey)],
   yearold: ["Year, oldest first", (a, b) => (a.year || 9999) - (b.year || 9999) || a.titleKey.localeCompare(b.titleKey)],
   platform: ["Platform", (a, b) => PLATFORMS.findIndex(p => p.k === a.platform) - PLATFORMS.findIndex(p => p.k === b.platform) || a.titleKey.localeCompare(b.titleKey)],
+  owner: ["Owner A to Z", (a, b) => (ownerNames(a) ? 0 : 1) - (ownerNames(b) ? 0 : 1) || norm(ownerNames(a)).localeCompare(norm(ownerNames(b))) || a.titleKey.localeCompare(b.titleKey)],
+  consoles: ["Consoles owned, most first", (a, b) => consoleCount(b.platform) - consoleCount(a.platform) || a.titleKey.localeCompare(b.titleKey)],
   publisher: ["Publisher A to Z", (a, b) => (a.publisher ? 0 : 1) - (b.publisher ? 0 : 1) || norm(a.publisher).localeCompare(norm(b.publisher)) || a.titleKey.localeCompare(b.titleKey)]
 };
 
@@ -722,6 +796,16 @@ function visibleGames() {
     if (f.publisher && g.publisher !== f.publisher) return false;
     if (f.sub === "sub" && !g.subscription) return false;
     if (f.sub === "own" && g.subscription) return false;
+    if (f.ownedBy && !ownersOf(g).includes(f.ownedBy)) return false;
+    if (f.onOwned === "yes" && !consoleCount(g.platform)) return false;
+    if (f.onOwned === "no" && consoleCount(g.platform)) return false;
+    if (f.year && String(g.year || "") !== f.year) return false;
+    if (f.subName && g.subName !== f.subName) return false;
+    if (f.notes === "yes" && !g.notes) return false;
+    if (f.notes === "no" && g.notes) return false;
+    if (f.cover === "yes" && !g.cover) return false;
+    if (f.cover === "no" && g.cover) return false;
+    if (f.addedBy && g.addedBy !== f.addedBy) return false;
     return toks.every(t => g._h.includes(t));
   });
   return a.sort((SORTS[S.sort] || SORTS.recent)[1]);
@@ -774,9 +858,9 @@ function navHtml() {
   return NAV.map(n => `<button type="button" class="navbtn${S.tab === n.k ? " on" : ""}" data-tab="${n.k}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${n.i}</svg><span>${n.l}</span></button>`).join("");
 }
 function showShell() {
-  $("#sidenav").innerHTML = `<div class="sbrand">${crystalSvg()}<span>SavePoint</span></div>${navHtml()}`;
+  $("#sidenav").innerHTML = `<div class="sbrand">${crystalSvg()}<span>${esc(myTheme().app)}</span></div>${navHtml()}`;
   $("#bottomnav").innerHTML = navHtml();
-  $("#brand").innerHTML = `${crystalSvg()}<span>SavePoint</span>`;
+  $("#brand").innerHTML = `${crystalSvg()}<span>${esc(myTheme().app)}</span>`;
   $("#topbar").hidden = false; $("#bottomnav").hidden = false; $("#fab").hidden = false; $("#rawgfoot").hidden = false;
 }
 function hideShell() {
@@ -785,7 +869,7 @@ function hideShell() {
 function setTab(k) {
   S.tab = k; S.cpage = 0; ls.set("sp_tab", k);
   document.documentElement.dataset.tab = k;
-  $("#sidenav").innerHTML = `<div class="sbrand">${crystalSvg()}<span>SavePoint</span></div>${navHtml()}`;
+  $("#sidenav").innerHTML = `<div class="sbrand">${crystalSvg()}<span>${esc(myTheme().app)}</span></div>${navHtml()}`;
   $("#bottomnav").innerHTML = navHtml();
   $("#toptab").textContent = k === "library" ? "" : NAV.find(n => n.k === k).l;
   renderView(); window.scrollTo(0, 0);
@@ -795,7 +879,7 @@ function renderView() {
   const ae = document.activeElement;
   if ((S.tab === "settings" || S.tab === "profile") && ae && ae.closest && ae.closest("#view") && /INPUT|TEXTAREA|SELECT/.test(ae.tagName)) return;
   const v = $("#view");
-  if (S.tab === "library") { v.innerHTML = `${heroHtml()}<div class="resbar" id="resbar"></div><div class="grid" id="libList"></div>`; updateLibrary(); }
+  if (S.tab === "library") { v.innerHTML = `${heroHtml()}<div class="resbar" id="resbar"></div><div class="grid v-${S.view}" id="libList"></div>`; updateLibrary(); }
   else if (S.tab === "consoles") v.innerHTML = consolesHtml();
   else if (S.tab === "profile") v.innerHTML = profileHtml();
   else v.innerHTML = settingsHtml();
@@ -809,21 +893,43 @@ function bannerHtml(tab, title, sub, extra = "", attrs = "") {
 const welcomeText = () => { const t = myTheme(); return t.greets[S.wi % t.greets.length].replace("{n}", personName(me())); };
 function heroHtml() {
   const t = myTheme(), own = PLATFORMS.filter(p => S.owned[p.k]).length;
-  return bannerHtml("library", t.name, esc(t.tag), `<p class="greet" id="greet">${esc(welcomeText())}</p><div class="bstats"><b>${S.games.length}</b>games<b>${own}</b>consoles</div>`, ` data-action="next-welcome" role="button" tabindex="0" aria-label="Change welcome message"`);
+  return bannerHtml("library", t.app, esc(t.tag), `<p class="greet" id="greet">${esc(welcomeText())}</p><div class="bstats"><b>${S.games.length}</b>games<b>${own}</b>consoles</div>`, ` data-action="next-welcome" role="button" tabindex="0" aria-label="Change welcome message"`);
 }
 function cardHtml(g) {
   const p = PLAT[g.platform] || PLAT.other, nv = versionCount(g);
-  return `<button type="button" class="card" data-action="open-game" data-id="${esc(g.id)}"><div class="cover">${coverHtml(g)}</div><div class="cmeta"><div class="ctitle">${esc(g.title)}</div><div class="crow"><span class="chip" style="--c:${p.c}">${esc(p.s)}</span>${g.year ? `<span>${g.year}</span>` : ""}</div><div class="tags">${nv > 1 ? `<span class="tag">${nv} versions</span>` : ""}${g.subscription ? `<span class="tag sub">${esc(g.subName || "Subscription")}</span>` : ""}</div></div></button>`;
+  return `<button type="button" class="card" data-action="open-game" data-id="${esc(g.id)}"><div class="cover">${coverHtml(g)}</div><div class="cmeta"><div class="ctitle">${esc(g.title)}</div><div class="crow"><span class="chip" style="--c:${p.c}">${esc(p.s)}</span>${g.year ? `<span>${g.year}</span>` : ""}</div><div class="tags"><span class="tag own">${esc(ownerNames(g))}</span>${nv > 1 ? `<span class="tag">${nv} versions</span>` : ""}${g.subscription ? `<span class="tag sub">${esc(g.subName || "Subscription")}</span>` : ""}</div></div></button>`;
+}
+const VIEWS = {
+  list: ["List without images", '<path d="M4 6h16M4 12h16M4 18h16"/>'],
+  listimg: ["List with images", '<rect x="3" y="4" width="5" height="5" rx="1"/><rect x="3" y="15" width="5" height="5" rx="1"/><path d="M12 6.5h9M12 17.5h9"/>'],
+  small: ["Smaller grid", '<rect x="3" y="3" width="5" height="5" rx="1"/><rect x="10" y="3" width="5" height="5" rx="1"/><rect x="17" y="3" width="4" height="5" rx="1"/><rect x="3" y="11" width="5" height="5" rx="1"/><rect x="10" y="11" width="5" height="5" rx="1"/><rect x="17" y="11" width="4" height="5" rx="1"/>'],
+  big: ["Bigger grid", '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>']
+};
+if (!VIEWS[S.view]) S.view = "big";
+function viewSwitchHtml() { return Object.entries(VIEWS).map(([k, v]) => `<button type="button" data-action="set-view" data-v="${k}" aria-label="${v[0]}" title="${v[0]}" aria-pressed="${S.view === k}" class="${S.view === k ? "on" : ""}"><svg viewBox="0 0 24 24" aria-hidden="true">${v[1]}</svg></button>`).join(""); }
+function setView(v) {
+  if (!VIEWS[v]) return;
+  S.view = v; ls.set("sp_view", v);
+  S.members[me()] = { ...(S.members[me()] || {}), view: v };
+  setDoc(doc(db, "gamesMeta", "household", "members", me()), { view: v }, { merge: true }).catch(e => showErr("Save failed: " + e.message));
+  updateLibrary();
 }
 function filterLabel(k, v) {
   if (k === "platform") return (PLAT[v] || {}).l || v;
   if (k === "sub") return v === "sub" ? "Subscription only" : "Not subscription";
+  if (k === "ownedBy") return "Owned by " + personName(v);
+  if (k === "addedBy") return "Added by " + personName(v);
+  if (k === "onOwned") return v === "yes" ? "On consoles I own" : "Not on consoles I own";
+  if (k === "notes") return v === "yes" ? "Has notes" : "No notes";
+  if (k === "cover") return v === "yes" ? "Has cover" : "No cover";
+  if (k === "subName") return "Subscription: " + v;
   return v;
 }
 function updateLibrary() {
   if (S.tab !== "library" || !$("#libList")) return;
   const list = visibleGames(), af = activeFilters();
   $("#resbar").innerHTML = `<span>${list.length} ${list.length === 1 ? "game" : "games"}${list.length !== S.games.length ? ` of ${S.games.length}` : ""}</span>${af.map(([k, v]) => `<span class="fchip">${esc(filterLabel(k, v))}<button type="button" data-action="clear-filter" data-k="${k}" aria-label="Remove filter">✕</button></span>`).join("")}`;
+  $("#libList").className = "grid v-" + S.view; $("#vsw").innerHTML = viewSwitchHtml();
   $("#libList").innerHTML = list.length ? list.map(cardHtml).join("") :
     `<div class="empty">${S.games.length ? "Nothing matches your search or filters." : "No games yet. Tap + to add the first one."}</div>`;
   $("#sortBtn").textContent = "Sort: " + SORTS[S.sort][0];
@@ -842,8 +948,14 @@ function openFilters() {
   const genres = uniq(g.flatMap(x => x.genres || [])).sort().map(x => [x, x]);
   const decs = uniq(g.map(x => decadeOf(x.year))).sort().map(x => [x, x]);
   const pubs = uniq(g.map(x => x.publisher)).sort((a, b) => a.localeCompare(b)).map(x => [x, x]);
-  const body = sel("f_platform", "Platform", plats) + sel("f_genre", "Genre", genres) + sel("f_decade", "Decade", decs) + sel("f_publisher", "Publisher", pubs) +
-    sel("f_sub", "Subscription", [["sub", "Subscription only"], ["own", "Not subscription"]]);
+  const people = uniq([...HOUSEHOLD, ...g.flatMap(ownersOf), ...g.map(x => x.addedBy)]).map(u => [u, personName(u)]);
+  const years = uniq(g.map(x => x.year ? String(x.year) : "")).sort((x, y) => y - x).map(x => [x, x]);
+  const subs = uniq(g.map(x => x.subName)).sort().map(x => [x, x]);
+  const yn = (id, label, yes, no) => sel(id, label, [["yes", yes], ["no", no]]);
+  const body = sel("f_platform", "Platform", plats) + sel("f_ownedBy", "Owned by", people) + yn("f_onOwned", "On consoles I own", "Only games on consoles I own", "Only games on consoles I do not own") +
+    sel("f_year", "Year", years) + sel("f_publisher", "Publisher", pubs) + sel("f_genre", "Genre", genres) + sel("f_decade", "Decade", decs) +
+    sel("f_sub", "Subscription", [["sub", "Subscription only"], ["own", "Not subscription"]]) + (subs.length ? sel("f_subName", "Subscription name", subs) : "") +
+    yn("f_notes", "Notes", "Has notes", "No notes") + yn("f_cover", "Cover image", "Has a cover", "No cover") + sel("f_addedBy", "Added by", people);
   openSheet("Filters", body, `<button type="button" class="btn" data-action="clear-filters">Clear</button><button type="button" class="btn primary" data-action="apply-filters">Show games</button>`);
 }
 
@@ -852,7 +964,7 @@ function openGame(id) {
   const g = S.games.find(x => x.id === id); if (!g) return;
   const p = PLAT[g.platform] || PLAT.other, others = (S.versions.get(g.titleKey) || []).filter(x => x.id !== g.id);
   const kv = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
-  const body = `<div class="big">${coverHtml(g)}</div><dl class="kv">${kv("Platform", esc(p.l))}${kv("Year", g.year || "")}${kv("Genres", esc((g.genres || []).join(", ")))}${kv("Publisher", esc(g.publisher || ""))}${kv("Subscription", g.subscription ? esc(g.subName || "Yes") : "")}${kv("Added", g.addedAt ? new Date(g.addedAt).toLocaleDateString("en-IE") : "")}${kv("Notes", esc(g.notes || ""))}</dl>${others.length ? `<div class="gname">Other versions</div>${others.map(o => `<button type="button" class="opt" data-action="open-game" data-id="${esc(o.id)}"><span>${esc((PLAT[o.platform] || PLAT.other).l)}</span><span>›</span></button>`).join("")}` : ""}`;
+  const body = `<div class="big">${coverHtml(g)}</div><dl class="kv">${kv("Platform", esc(p.l))}${kv("Year", g.year || "")}${kv("Genres", esc((g.genres || []).join(", ")))}${kv("Publisher", esc(g.publisher || ""))}${kv("Subscription", g.subscription ? esc(g.subName || "Yes") : "")}${kv("Owned by", esc(ownerNames(g)))}${kv("Added", g.addedAt ? new Date(g.addedAt).toLocaleDateString("en-IE") : "")}${kv("Notes", esc(g.notes || ""))}</dl>${others.length ? `<div class="gname">Other versions</div>${others.map(o => `<button type="button" class="opt" data-action="open-game" data-id="${esc(o.id)}"><span>${esc((PLAT[o.platform] || PLAT.other).l)}</span><span>›</span></button>`).join("")}` : ""}`;
   openSheet(g.title, body, `<button type="button" class="btn danger" data-action="delete-game" data-id="${esc(g.id)}">Delete</button><button type="button" class="btn primary" data-action="edit-game" data-id="${esc(g.id)}">Edit</button>`);
 }
 function platOptionsHtml(sel, suggested = []) {
@@ -870,6 +982,7 @@ function formHtml(d) {
 <div class="field"><label for="f_publisher">Publisher</label><input id="f_publisher" value="${esc(d.publisher || "")}" autocomplete="off"></div></div>
 <div class="field"><label for="f_genres">Genres (comma separated)</label><input id="f_genres" value="${esc(d.genres || "")}" autocomplete="off"></div>
 <div class="field"><label for="f_cover">Cover image link (optional)</label><input id="f_cover" value="${esc(d.cover || "")}" autocomplete="off" inputmode="url"></div>
+<div class="field"><label>Owned by</label><div class="owners">${HOUSEHOLD.map(u => `<label class="check"><input type="checkbox" name="owner" value="${u}"${(d.ownedBy || [me()]).includes(u) ? " checked" : ""}><span>${esc(personName(u))}</span></label>`).join("")}</div></div>
 <label class="check"><input type="checkbox" id="f_sub"${d.subscription ? " checked" : ""}><span>Subscription game (for example PS Plus)</span></label>
 <div class="field" id="subrow"${d.subscription ? "" : " hidden"}><label for="f_subname">Subscription name</label><input id="f_subname" list="sublist" value="${esc(d.subName || "")}" autocomplete="off"><datalist id="sublist"><option value="PS Plus"><option value="Game Pass"><option value="Nintendo Switch Online"><option value="EA Play"><option value="Ubisoft+"></datalist></div>
 <div class="field"><label for="f_notes">Notes</label><textarea id="f_notes">${esc(d.notes || "")}</textarea></div>
@@ -878,7 +991,7 @@ function formHtml(d) {
 const saveFoot = label => `<button type="button" class="btn ghost" data-action="close-sheet">Cancel</button><button type="button" class="btn primary" id="saveBtn" data-action="save-game">${label}</button>`;
 function readForm() {
   const v = id => (($("#" + id) || {}).value || "").trim();
-  return { title: v("f_title"), platform: v("f_platform"), year: v("f_year"), publisher: v("f_publisher"), genres: v("f_genres"), cover: v("f_cover"), subscription: !!($("#f_sub") || {}).checked, subName: v("f_subname"), notes: v("f_notes") };
+  return { title: v("f_title"), platform: v("f_platform"), year: v("f_year"), publisher: v("f_publisher"), genres: v("f_genres"), cover: v("f_cover"), subscription: !!($("#f_sub") || {}).checked, subName: v("f_subname"), notes: v("f_notes"), ownedBy: [...document.querySelectorAll("input[name=owner]:checked")].map(x => x.value) };
 }
 function formMsg(text, kind = "bad") { const m = $("#formMsg"); if (m) m.innerHTML = text ? `<div class="msg ${kind}">${text}</div>` : ""; }
 
@@ -887,7 +1000,7 @@ function openAdd(opts = {}) {
   S.add = { mode: "find", q: "", results: [], busy: false, msg: "", draft: null, editId: null, dupOk: false, token: 0 };
   if (editing) {
     S.add.mode = "form"; S.add.editId = editing.id;
-    S.add.draft = { title: editing.title, platform: editing.platform, year: editing.year || "", publisher: editing.publisher || "", genres: (editing.genres || []).join(", "), cover: editing.cover || "", subscription: !!editing.subscription, subName: editing.subName || "", notes: editing.notes || "", rawgId: editing.rawgId || null };
+    S.add.draft = { title: editing.title, platform: editing.platform, year: editing.year || "", publisher: editing.publisher || "", genres: (editing.genres || []).join(", "), cover: editing.cover || "", subscription: !!editing.subscription, subName: editing.subName || "", notes: editing.notes || "", ownedBy: ownersOf(editing), rawgId: editing.rawgId || null };
   } else if (opts.platform) {
     S.add.presetPlatform = opts.platform;
   }
@@ -971,7 +1084,7 @@ async function decodeBarcode(cv) {
     if (!window.ZXing) await loadScript(ZXING_URL);
     const res = await new ZXing.BrowserMultiFormatReader().decodeFromImageUrl(cv.toDataURL("image/jpeg", 0.9));
     return res && res.getText();
-  } catch (e) { log("barcode decode: " + (e && e.message)); return null; }
+  } catch (e) { return null; }
 }
 async function startLive() {
   const box = $("#scanbox"); if (!box) return;
@@ -1007,7 +1120,7 @@ async function handlePhoto(file, purpose) {
     const qs = queryFromOcr(lines);
     if (!qs.length) return scanMsg("I could not read a title. Try a straighter, brighter photo of the front, or type the name.");
     return scanSearch(qs, "I read");
-  } catch (e) { log("photo: " + (e && e.message)); scanMsg("Could not read that photo. Check the connection (the reader downloads on first use) or type the name."); }
+  } catch (e) { scanMsg("Could not read that photo. Check the connection (the reader downloads on first use) or type the name."); }
 }
 
 /* RAWG */
@@ -1040,7 +1153,7 @@ async function doSearch() {
     if (S.add !== a || tok !== a.token) return;
     a.results = (j.results || []).map(mapResult);
     if (!a.results.length) a.msg = "No matches. Try fewer words, or add it by hand.";
-  } catch (e) { if (S.add !== a || tok !== a.token) return; a.results = []; a.msg = friendly(e); log("rawg search failed " + e.message); }
+  } catch (e) { if (S.add !== a || tok !== a.token) return; a.results = []; a.msg = friendly(e); }
   a.busy = false; paintResults();
 }
 async function fillDetail(id) {
@@ -1049,7 +1162,7 @@ async function fillDetail(id) {
     const a = S.add; if (!a || a.mode !== "form" || !a.draft || a.draft.rawgId !== id) return;
     const pub = (j.publishers || []).map(p => p.name).join(", ") || (j.developers || []).map(p => p.name).join(", ");
     const el = $("#f_publisher"); if (el && !el.value.trim() && pub) el.value = pub;
-  } catch (e) { log("detail failed " + e.message); }
+  } catch (e) { }
 }
 function pickResult(i) {
   const a = S.add, r = a && a.results[i]; if (!r) return;
@@ -1064,6 +1177,7 @@ function saveGame() {
   const d = readForm();
   if (!d.title) return formMsg("Please enter a title.");
   if (!d.platform) return formMsg("Please choose a platform.");
+  if (!d.ownedBy.length) return formMsg("Please choose who owns this game.");
   let year = null;
   if (d.year) { year = parseInt(d.year, 10); if (!/^\d{4}$/.test(d.year) || year < 1950 || year > 2100) return formMsg("Year should be four digits, like 2001."); }
   const key = norm(d.title);
@@ -1075,7 +1189,7 @@ function saveGame() {
   }
   const data = {
     title: d.title, platform: d.platform, year, publisher: d.publisher, genres: d.genres.split(",").map(x => x.trim()).filter(Boolean),
-    cover: d.cover, subscription: d.subscription, subName: d.subscription ? d.subName : "", notes: d.notes,
+    cover: d.cover, subscription: d.subscription, subName: d.subscription ? d.subName : "", notes: d.notes, ownedBy: d.ownedBy,
     rawgId: (a.draft && a.draft.rawgId) || null
   };
   if (a.editId) {
@@ -1096,22 +1210,30 @@ function deleteGame(id, btn) {
 /* ===================== CONSOLES: one shared sticker album, consoles only ===================== */
 function consolesHtml() {
   const total = PLATFORMS.length, own = PLATFORMS.filter(p => S.owned[p.k]).length;
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const list = S.onlyOwned ? PLATFORMS.filter(p => S.owned[p.k]) : PLATFORMS;
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   S.cpage = Math.min(Math.max(0, S.cpage), pages - 1);
-  const slice = PLATFORMS.slice(S.cpage * PAGE_SIZE, (S.cpage + 1) * PAGE_SIZE);
+  const slice = list.slice(S.cpage * PAGE_SIZE, (S.cpage + 1) * PAGE_SIZE);
   const rots = [-1.6, 1.1, -0.7, 1.7, -1.2, 0.8];
   let cells = slice.map((p, i) => S.owned[p.k]
-    ? `<button type="button" class="sticker cs" style="--rot:${rots[i % rots.length]}deg" data-action="open-console" data-k="${p.k}"><div class="img" style="background:${p.c}33">${consoleIcon(p.t, p.c)}</div><div class="cap">${esc(p.l)}</div></button>`
+    ? `<button type="button" class="sticker cs" style="--rot:${rots[i % rots.length]}deg" data-action="open-console" data-k="${p.k}"><div class="img" style="background:${p.c}33">${consoleIcon(p.t, p.c)}</div><div class="cap">${esc(p.l)}</div><span class="by" aria-label="${consoleCount(p.k)} owned">${consoleCount(p.k)}</span></button>`
     : `<button type="button" class="slot cs" data-action="open-console" data-k="${p.k}">${consoleIcon(p.t, p.c)}<span>${esc(p.l)}</span></button>`).join("");
   for (let i = slice.length; i < PAGE_SIZE; i++) cells += `<div class="slot blank"></div>`;
   return bannerHtml("consoles", "Console album", `${own} of ${total} consoles in the house`) + `
+<button type="button" class="tog${S.onlyOwned ? " on" : ""}" data-action="toggle-only-owned" role="switch" aria-checked="${S.onlyOwned}"><span><b>Only consoles I own</b><small>Hide the empty slots</small></span><i></i></button>
 <div class="album">${cells}</div>
 <div class="pager"><button type="button" class="btn sm" data-action="console-page" data-d="-1"${S.cpage <= 0 ? " disabled" : ""}>\u2190</button><span>Page ${S.cpage + 1} of ${pages}</span><button type="button" class="btn sm" data-action="console-page" data-d="1"${S.cpage >= pages - 1 ? " disabled" : ""}>\u2192</button></div>`;
+}
+function setConsoleCount(k, n, reopen) {
+  S.owned = { ...S.owned, [k]: n > 0 }; S.counts = { ...S.counts, [k]: n };
+  if (reopen) openConsole(k);
+  renderView(); updateLibrary();
+  return setDoc(doc(db, "gamesMeta", "household", "config", "consoles"), { owned: { [k]: n > 0 }, counts: { [k]: n } }, { merge: true }).catch(e => showErr("Save failed: " + e.message));
 }
 function openConsole(k) {
   const p = PLAT[k]; if (!p) return;
   const n = S.games.filter(g => g.platform === k).length, on = !!S.owned[k];
-  const body = `<div class="big" style="display:grid;place-items:center;background:${p.c}33"><div style="width:120px">${consoleIcon(p.t, p.c)}</div></div><dl class="kv"><dt>Maker</dt><dd>${esc(p.g)}</dd><dt>In the house</dt><dd>${on ? "Yes" : "Not yet"}</dd><dt>Games saved</dt><dd>${n}</dd></dl>`;
+  const body = `<div class="big" style="display:grid;place-items:center;background:${p.c}33"><div style="width:120px">${consoleIcon(p.t, p.c)}</div></div><dl class="kv"><dt>Maker</dt><dd>${esc(p.g)}</dd><dt>In the house</dt><dd>${on ? "Yes" : "Not yet"}</dd><dt>Devices owned</dt><dd><span class="stepper"><button type="button" class="btn sm" data-action="console-count" data-k="${k}" data-d="-1" aria-label="One fewer"${on ? "" : " disabled"}>\u2212</button><b id="ccount">${consoleCount(k)}</b><button type="button" class="btn sm" data-action="console-count" data-k="${k}" data-d="1" aria-label="One more">+</button></span></dd><dt>Games saved</dt><dd>${n}</dd></dl>`;
   openSheet(p.l, body, `<button type="button" class="btn${on ? "" : " primary"}" data-action="toggle-console" data-k="${k}" data-sheet="1">${on ? "Remove from the house" : "We have it"}</button>${n ? `<button type="button" class="btn primary" data-action="show-console-games" data-k="${k}">Show games</button>` : ""}`);
 }
 
@@ -1149,23 +1271,56 @@ function chooseTheme(id) {
   renderView(); toast(THEME[id].name);
 }
 
+/* ===================== VERSION AND SYNC ===================== */
+async function loadVersion() {
+  try {
+    const keys = await caches.keys();
+    const n = keys.map(k => /^savepoint-v(\d+)$/.exec(k)).filter(Boolean).map(m => +m[1]).sort((a, b) => b - a)[0];
+    if (n) return String(n);
+  } catch (e) {}
+  try { const m = /const VERSION\s*=\s*(\d+)/.exec(await (await fetch("sw.js", { cache: "no-store" })).text()); if (m) return m[1]; } catch (e) {}
+  return "";
+}
+const hhmm = d => d.toLocaleTimeString("en-IE", { hour: "2-digit", minute: "2-digit" });
+function syncText() {
+  if (S.syncMsg) return S.syncMsg;
+  if (!navigator.onLine || (S.syncAt && S.syncCache)) return "Offline. Changes will upload when you are back online.";
+  return S.syncAt ? "Up to date at " + hhmm(S.syncAt) : "Checking…";
+}
+function updateSyncLine() { setStatus("syncStatus", syncText()); }
+function noteSnap(snap) {
+  const m = snap.metadata || {};
+  if (!m.fromCache) { S.syncAt = new Date(); S.syncCache = false; } else if (S.syncAt) S.syncCache = true;
+}
+async function syncNow() {
+  S.syncMsg = "Syncing…"; updateSyncLine();
+  try { await waitForPendingWrites(db); await getDocsFromServer(collection(db, "games")); S.syncAt = new Date(); S.syncCache = false; }
+  catch (e) { S.syncCache = true; if (!S.syncAt) S.syncAt = new Date(0); }
+  S.syncMsg = ""; updateSyncLine();
+}
+
 /* ===================== SETTINGS ===================== */
 function settingsHtml() {
-  return bannerHtml("settings", "Settings", "Version, account and game database") + `<div class="set"><h3>App version</h3><div class="ver">App version ${APP_VERSION}</div><p style="margin:6px 0 0">If something looks old, close and reopen the app once.</p></div>
-<div class="set"><h3>Account</h3><p>Signed in as ${esc(S.user.displayName || "")} (${esc(S.user.email || "")}).</p><div class="btns"><button type="button" class="btn sm" data-action="signout">Sign out</button></div></div>
-<div class="set"><h3>Game database (RAWG)</h3><p>Used for search, covers and details. Paste the key once; it is saved for everyone who can sign in.</p>
+  const u = S.user;
+  return bannerHtml("settings", "Settings", `SavePoint version <span id="ver">${esc(S.version || "…")}</span>`) + `<div class="set"><h3>Sync across devices</h3><p>Signed in as ${esc(u.displayName || "")} (${esc(u.email || "")}).</p>
+<p id="syncStatus">${esc(syncText())}</p>
+<div class="btns"><button type="button" class="btn sm primary" data-action="sync-now">Sync now</button><button type="button" class="btn sm" data-action="export">Export JSON backup</button><button type="button" class="btn sm" data-action="signout">Sign out</button></div>
+<p style="margin-top:10px">The backup saves all games, profile and owned consoles to a file on this device. If something looks old, close and reopen the app once.</p></div>
+<div class="set"><h3>Game database tools</h3><p>Automatic tools only fill empty fields and never change what you edited. Only exact title matches are used. They need the RAWG key under Advanced.</p>
+<div class="btns"><button type="button" class="btn sm" data-action="auto-covers">Assign covers automatically</button><button type="button" class="btn sm" data-action="auto-match">Match games with RAWG</button><button type="button" class="btn sm ghost" data-action="stop-auto">Stop</button></div>
+<p id="autoStatus" style="margin-top:8px"></p></div>
+<div class="set"><h3>About</h3><p>Game data and images from <a href="https://rawg.io" target="_blank" rel="noopener">RAWG</a>.</p></div>
+<details class="set adv" id="adv"${S.advOpen ? " open" : ""}><summary>Advanced</summary>
+<div class="sub-h">Game database (RAWG)</div><p>Used for search, covers and details. Paste the key once; it is saved for everyone who can sign in.</p>
 <div class="field"><label for="rawgkey">RAWG key</label><input id="rawgkey" type="password" autocomplete="off" value="${esc(S.rawgKey)}"></div>
 <div class="btns"><button type="button" class="btn sm primary" data-action="save-key">Save key</button><button type="button" class="btn sm" data-action="test-key">Test key</button></div>
 <p id="keyStatus" style="margin-top:8px"></p>
-<p style="margin-top:12px">Automatic tools only fill empty fields and never change what you edited. Only exact title matches are used.</p>
-<div class="btns"><button type="button" class="btn sm" data-action="auto-covers">Assign covers automatically</button><button type="button" class="btn sm" data-action="auto-match">Match games with RAWG</button><button type="button" class="btn sm ghost" data-action="stop-auto">Stop</button></div>
-<p id="autoStatus" style="margin-top:8px"></p></div>
-<div class="set"><h3>Barcode helper</h3><p>The web address of your free Cloudflare helper (it starts with https://). Needed only for Scan barcode.</p>
+<div class="sub-h">Barcode helper</div><p>The web address of your free Cloudflare helper (it starts with https://). Needed only for Scan barcode.</p>
 <div class="field"><label for="upcurl">Helper address</label><input id="upcurl" type="url" autocomplete="off" placeholder="https://savepoint-barcode.yourname.workers.dev" value="${esc(S.upc)}"></div>
 <div class="btns"><button type="button" class="btn sm primary" data-action="save-upc">Save address</button><button type="button" class="btn sm" data-action="test-upc">Test</button></div>
-<p id="upcStatus" style="margin-top:8px"></p></div>
-<div class="set"><h3>Backup</h3><p>Saves all games, profile and owned consoles to a file on this device.</p><div class="btns"><button type="button" class="btn sm primary" data-action="export">Export JSON backup</button></div></div>
-<div class="set"><h3>About</h3><p>Game data and images from <a href="https://rawg.io" target="_blank" rel="noopener">RAWG</a>. Add ?debug=1 to the web address to see a tap log.</p></div>`;
+<p id="upcStatus" style="margin-top:8px"></p>
+<div class="sub-h">Account ID</div><p>Your sign in ID for this account. It is the ID that goes on the allowed list.</p>
+<span class="uid" id="uid">${esc(u.uid)}</span><div class="btns"><button type="button" class="btn sm" data-action="copy-uid">Copy ID</button></div></details>`;
 }
 function setStatus(id, txt) { const el = $("#" + id); if (el) el.textContent = txt; }
 async function testKey() {
@@ -1232,7 +1387,7 @@ async function autoMatch(mode) {
   setStatus("autoStatus", `Done${stopped}: ${upd} updated, ${miss} left as they were (no exact match or nothing to add).`);
 }
 function exportJson() {
-  const data = { app: "SavePoint", version: APP_VERSION, exportedAt: new Date().toISOString(), games: S.games.map(g => { const { _h, titleKey, ...rest } = g; return rest; }), members: S.members, consolesOwned: S.owned };
+  const data = { app: "SavePoint", version: S.version, exportedAt: new Date().toISOString(), games: S.games.map(g => { const { _h, titleKey, ...rest } = g; return { ...rest, ownedBy: ownersOf(g), addedBy: g.addedBy || null }; }), members: S.members, consolesOwned: S.owned, consoleCounts: Object.fromEntries(PLATFORMS.filter(p => consoleCount(p.k) > 0).map(p => [p.k, consoleCount(p.k)])) };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
   a.download = `savepoint-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -1259,7 +1414,10 @@ function fsError(e) {
 }
 function startListeners() {
   stopListeners();
-  S.unsub.push(onSnapshot(collection(db, "games"), snap => {
+  S.unsub.push(onSnapshot(collection(db, "games"), { includeMetadataChanges: true }, snap => {
+    noteSnap(snap);
+    if (S.gotGames && snap.docChanges && !snap.docChanges().length) { updateSyncLine(); return; }
+    S.gotGames = true;
     S.games = snap.docs.map(d => ({ id: d.id, ...d.data() })); rebuildIndex();
     if (S.tab === "library") updateLibrary(); else if (!sheetOpen()) renderView();
   }, fsError));
@@ -1269,6 +1427,7 @@ function startListeners() {
     if (!mine && !S.gotMembers) setDoc(doc(db, "gamesMeta", "household", "members", me()), { name: S.user.displayName || PEOPLE[me()] || "", nickname: "", theme: S.theme || "crystal", favs: [] }, { merge: true }).catch(fsError);
     S.gotMembers = true;
     if (mine && mine.theme && mine.theme !== S.theme && THEME[mine.theme]) applyTheme(mine.theme);
+    if (mine && VIEWS[mine.view] && mine.view !== S.view) { S.view = mine.view; ls.set("sp_view", S.view); }
     rebuildIndex(); if (!sheetOpen()) renderView(); else updateLibrary();
   }, fsError));
   S.unsub.push(onSnapshot(doc(db, "gamesMeta", "household", "config", "main"), snap => {
@@ -1277,7 +1436,7 @@ function startListeners() {
     if (d.upcProxy) { S.upc = d.upcProxy; ls.set("sp_upc", d.upcProxy); }
   }, fsError));
   S.unsub.push(onSnapshot(doc(db, "gamesMeta", "household", "config", "consoles"), snap => {
-    S.owned = (snap.exists() && snap.data().owned) || {};
+    S.owned = (snap.exists() && snap.data().owned) || {}; S.counts = (snap.exists() && snap.data().counts) || {};
     if (!sheetOpen()) renderView(); else updateLibrary();
   }, fsError));
 }
@@ -1289,14 +1448,15 @@ function onUser(user) {
 async function signIn() {
   try { await signInWithPopup(auth, new GoogleAuthProvider()); }
   catch (e) {
-    log("signin " + (e && e.code));
-    if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment")) { try { await signInWithRedirect(auth, new GoogleAuthProvider()); return; } catch (x) { e = x; } }
+        if (e && (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment")) { try { await signInWithRedirect(auth, new GoogleAuthProvider()); return; } catch (x) { e = x; } }
     if (e && (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request")) return;
     showLogin("Sign in failed: " + (e && (e.message || e.code)));
   }
 }
 
 /* ===================== EVENTS ===================== */
+document.addEventListener("toggle", e => { if (e.target && e.target.id === "adv") S.advOpen = e.target.open; }, true);
+window.addEventListener("online", updateSyncLine); window.addEventListener("offline", updateSyncLine);
 document.addEventListener("click", e => {
   const tb = e.target.closest("button[data-tab]");
   if (tb) { setTab(tb.dataset.tab); return; }
@@ -1346,11 +1506,12 @@ function act(name, el) {
     case "clear-filter": S.f[el.dataset.k] = ""; return updateLibrary();
     case "open-console": return openConsole(el.dataset.k);
     case "console-page": S.cpage += +el.dataset.d; return renderView();
-    case "show-console-games": { const k = el.dataset.k; closeSheet(); S.f = { platform: k, genre: "", decade: "", publisher: "", sub: "" }; S.q = ""; const q = $("#q"); if (q) q.value = ""; return setTab("library"); }
+    case "show-console-games": { const k = el.dataset.k; closeSheet(); S.f = { ...emptyFilters(), platform: k }; S.q = ""; const q = $("#q"); if (q) q.value = ""; return setTab("library"); }
     case "toggle-console": {
-      const k = el.dataset.k, v = !S.owned[k]; S.owned = { ...S.owned, [k]: v }; if (el.dataset.sheet) closeSheet(); renderView();
-      return setDoc(doc(db, "gamesMeta", "household", "config", "consoles"), { owned: { [k]: v } }, { merge: true }).catch(e => showErr("Save failed: " + e.message));
+      const k = el.dataset.k, v = !S.owned[k]; if (el.dataset.sheet) closeSheet(); return setConsoleCount(k, v ? 1 : 0);
     }
+    case "console-count": { const k = el.dataset.k; return setConsoleCount(k, Math.min(20, Math.max(0, consoleCount(k) + +el.dataset.d)), true); }
+    case "toggle-only-owned": S.onlyOwned = !S.onlyOwned; ls.set("sp_onlyown", S.onlyOwned ? "1" : "0"); S.cpage = 0; return renderView();
     case "pick-theme": return chooseTheme(el.dataset.id);
     case "save-profile": return saveProfile();
     case "next-welcome": { S.wi++; const g = $("#greet"); if (g) g.textContent = welcomeText(); return; }
@@ -1358,6 +1519,9 @@ function act(name, el) {
     case "toggle-motion": S.motion = !S.motion; ls.set("sp_motion", S.motion ? "1" : "0"); paintBackdrop(); return renderView();
     case "save-key": return saveKey();
     case "save-upc": return saveUpc();
+    case "sync-now": return syncNow();
+    case "copy-uid": try { navigator.clipboard.writeText(S.user.uid); toast("ID copied"); } catch (e) { toast("Could not copy"); } return;
+    case "set-view": return setView(el.dataset.v);
     case "test-upc": return testUpc();
     case "test-key": return testKey();
     case "auto-covers": return autoMatch("covers");
@@ -1369,12 +1533,12 @@ function act(name, el) {
 
 /* ===================== BOOT ===================== */
 function boot() {
-  log("boot v" + APP_VERSION);
-  applyTheme(S.theme);
+  loadVersion().then(v => { S.version = v || "unknown"; const el = $("#ver"); if (el) el.textContent = S.version; });
+    applyTheme(S.theme);
   if (/PASTE_/.test(JSON.stringify(FIREBASE_CONFIG))) return showSetup();
   app = initializeApp(FIREBASE_CONFIG); auth = getAuth(app);
   try { db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
-  catch (e) { log("persistent cache failed: " + e.message); db = initializeFirestore(app, {}); }
+  catch (e) { db = initializeFirestore(app, {}); }
   onAuthStateChanged(auth, onUser, e => showErr("Sign-in check failed: " + e.message));
 }
 try { boot(); } catch (e) { showErr("Start-up failed: " + (e && e.message)); }
@@ -1383,7 +1547,7 @@ try { boot(); } catch (e) { showErr("Start-up failed: " + (e && e.message)); }
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
-    navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(function(e){if(window.__spLog)window.__spLog('sw register failed '+e)});
+    navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(function(){});
   });
 }
 </script>
