@@ -1,6 +1,6 @@
 /* SavePoint service worker. Network first, never trusts the browser cache for our own files.
    The cache name changes every version so old files are always dropped. */
-const VERSION = 9;
+const VERSION = 10;
 const CACHE = 'savepoint-v' + VERSION;
 
 self.addEventListener('install', e => { self.skipWaiting(); });

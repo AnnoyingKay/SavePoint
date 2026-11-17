@@ -270,6 +270,12 @@ h1,h2,h3,.brand,.pname,.sbrand,.th .tn,.tog b{font-family:var(--fd);text-transfo
 .stepper{display:inline-flex;align-items:center;gap:12px}
 .stepper b{min-width:1.5em;text-align:center;font-size:17px}
 
+/* v10 import and found-a-copy */
+.improw{border-top:1px solid var(--border);padding:10px 0}
+.imptitle small{color:var(--muted);font-weight:400}
+.imphint{font-size:13px;color:var(--muted);margin:2px 0}
+.impsec{margin:16px 0 4px;font-size:15px}
+
 </style>
 </head>
 <body>
@@ -1002,7 +1008,7 @@ function formMsg(text, kind = "bad") { const m = $("#formMsg"); if (m) m.innerHT
 
 function openAdd(opts = {}) {
   const editing = opts.editId ? S.games.find(g => g.id === opts.editId) : null;
-  S.add = { mode: "find", q: "", results: [], busy: false, msg: "", draft: null, editId: null, dupOk: false, token: 0 };
+  S.add = { mode: "find", q: "", results: [], busy: false, msg: "", draft: null, editId: null, dupOk: false, copyOk: false, token: 0 };
   if (editing) {
     S.add.mode = "form"; S.add.editId = editing.id;
     S.add.draft = { title: editing.title, platform: editing.platform, year: editing.year || "", publisher: editing.publisher || "", genres: (editing.genres || []).join(", "), cover: editing.cover || "", subscription: !!editing.subscription, subName: editing.subName || "", notes: editing.notes || "", ownedBy: ownersOf(editing), format: fmtOf(editing) || "physical", rawgId: editing.rawgId || null };
@@ -1171,7 +1177,7 @@ async function fillDetail(id) {
 }
 function pickResult(i) {
   const a = S.add, r = a && a.results[i]; if (!r) return;
-  a.fromResults = true; a.mode = "form"; a.dupOk = false;
+  a.fromResults = true; a.mode = "form"; a.dupOk = false; a.copyOk = false;
   a.draft = { title: r.title, platform: r.suggested.length === 1 ? r.suggested[0] : (a.presetPlatform || ""), suggested: r.suggested, year: r.year, publisher: "", genres: r.genres.join(", "), cover: r.cover, subscription: false, subName: "", notes: "", rawgId: r.rawgId };
   paintAdd(); fillDetail(r.rawgId);
 }
@@ -1187,9 +1193,16 @@ function saveGame() {
   if (d.year) { year = parseInt(d.year, 10); if (!/^\d{4}$/.test(d.year) || year < 1950 || year > 2100) return formMsg("Year should be four digits, like 2001."); }
   const key = norm(d.title);
   const same = S.games.filter(g => g.titleKey === key && g.id !== a.editId);
-  if (same.some(g => g.platform === d.platform)) return formMsg(`Already in your library on ${esc(PLAT[d.platform].l)}.`);
-  if (same.length && !a.dupOk) {
-    a.dupOk = true; formMsg(`Another version is already saved (${esc(same.map(g => PLAT[g.platform] ? PLAT[g.platform].l : "Other").join(", "))}). Tap "Add anyway" to save this one too.`, "warn");
+  const sameP = same.filter(g => g.platform === d.platform);
+  if (sameP.length && a.editId) return formMsg(`Already in your library on ${esc(PLAT[d.platform].l)}.`);
+  if (sameP.length && !a.copyOk) {
+    const line = g => `${esc(g.title)}, ${esc(PLAT[g.platform].l)}, ${esc(FORMATS[fmtOf(g)] || "format not set")}, owned by ${esc(ownerNames(g) || "nobody")}`;
+    formMsg(`<b>Found a copy.</b> Is this the one you are looking for?${sameP.map(g => `<div style="margin-top:8px">${line(g)}<br><button type="button" class="btn sm primary" data-action="copy-open" data-id="${g.id}">Yes, open this one</button></div>`).join("")}<div style="margin-top:10px"><button type="button" class="btn sm" data-action="copy-new">No, add another copy</button></div>`, "warn");
+    return;
+  }
+  const others = same.filter(g => g.platform !== d.platform);
+  if (others.length && !a.dupOk) {
+    a.dupOk = true; formMsg(`Another version is already saved (${esc(others.map(g => PLAT[g.platform] ? PLAT[g.platform].l : "Other").join(", "))}). Tap "Add anyway" to save this one too.`, "warn");
     const b = $("#saveBtn"); if (b) b.textContent = a.editId ? "Save anyway" : "Add anyway"; return;
   }
   const data = {
@@ -1324,6 +1337,75 @@ function bulkFormat(v) {
   list.forEach(g => updateDoc(doc(db, "games", g.id), { format: v }).catch(e => showErr("Save failed: " + e.message)));
   closeSheet(); toast(`${list.length} ${list.length === 1 ? "game" : "games"} set to ${FORMATS[v]}`);
 }
+/* ----- CSV import: title, platform (one or several, separated by ;), optional format, region, last_played, check ----- */
+function parseCsv(text) {
+  text = String(text).replace(/^\uFEFF/, ""); const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === ",") { row.push(f); f = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(f); f = ""; if (row.some(x => x.trim())) rows.push(row); row = []; }
+    else f += c;
+  }
+  row.push(f); if (row.some(x => x.trim())) rows.push(row);
+  return rows;
+}
+let impRows = [];
+function csvRead(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    const t = parseCsv(r.result); if (t.length < 2) return toast("That CSV has no games in it.");
+    const h = t[0].map(x => x.trim().toLowerCase()), ix = n => h.indexOf(n);
+    if (ix("title") < 0 || ix("platform") < 0) return toast("The CSV needs a title column and a platform column.");
+    const look = {}; PLATFORMS.forEach(p => [p.k, p.s, p.l].forEach(x => { const k = String(x).toLowerCase(); if (!(k in look)) look[k] = p.k; }));
+    const cell = (row, n) => ix(n) < 0 ? "" : String(row[ix(n)] || "").trim();
+    let skipped = 0; impRows = [];
+    t.slice(1).forEach(row => {
+      const title = cell(row, "title"); if (!title) return;
+      const plats = uniq(cell(row, "platform").split(/[;|]/).map(x => look[x.trim().toLowerCase()]).filter(Boolean));
+      if (!plats.length) { skipped++; return; }
+      const fm = cell(row, "format").toLowerCase();
+      impRows.push({ i: impRows.length, title, key: norm(title), plats, format: FORMATS[fm] ? fm : "", region: cell(row, "region"), last: cell(row, "last_played"), check: cell(row, "check") });
+    });
+    if (!impRows.length) return toast("No games with a platform I recognise.");
+    const count = {}; impRows.forEach(x => { count[x.key] = (count[x.key] || 0) + 1; });
+    const lib = (x, p) => S.games.filter(g => g.titleKey === x.key && g.platform === p);
+    impRows.forEach(x => {
+      x.reasons = [];
+      if (count[x.key] > 1) x.reasons.push(`This title appears ${count[x.key]} times in the list. Tick the ones you own.`);
+      if (x.plats.length > 1) x.reasons.push("It shows several platforms. Tick each platform you have it on. Tick more than one if you own several copies.");
+      x.plats.forEach(p => { const g = lib(x, p); if (g.length) x.reasons.push(`Already in your library on ${PLAT[p].l}${g.length > 1 ? " (" + g.length + " copies)" : ""}. Tick to add another copy.`); });
+      x.need = x.reasons.length > 0;
+      x.on = !x.need && !x.check;
+    });
+    const row = x => `<div class="improw"><div class="imptitle"><b>${esc(x.title)}</b>${x.region ? ` <small>(${esc(x.region)} version)</small>` : ""}${x.last ? `<small> Last played ${esc(x.last)}</small>` : ""}</div>${x.reasons.map(m => `<div class="imphint">${esc(m)}</div>`).join("")}${x.check ? `<div class="imphint">${esc(x.check)}</div>` : ""}<div class="owners">${x.plats.map(p => `<label class="check"><input type="checkbox" class="impck" data-r="${x.i}" data-p="${p}"${x.on ? " checked" : ""}><span>${esc(PLAT[p].l)}</span></label>`).join("")}</div></div>`;
+    const sect = (name, list) => list.length ? `<h3 class="impsec">${name} (${list.length})</h3>${list.map(row).join("")}` : "";
+    const need = impRows.filter(x => x.need), chk = impRows.filter(x => !x.need && x.check), ready = impRows.filter(x => !x.need && !x.check);
+    const body = `<p>${impRows.length} games in the file${skipped ? `, ${skipped} skipped because I did not recognise the platform` : ""}. Nothing is added until you tap Import.</p>
+<div class="field"><label for="imp_fmt">Format for these games</label><select id="imp_fmt"><option value="">Not set yet</option><option value="physical">Physical</option><option value="digital">Digital</option></select></div>
+<div class="btns" style="margin-bottom:6px"><button type="button" class="btn sm" data-action="imp-none">Untick everything</button></div>
+${sect("Please choose", need)}${sect("Ready to import", ready)}${sect("Not ticked: no play date, so probably not yours", chk)}`;
+    openSheet("Import from CSV", body, `<button type="button" class="btn ghost" data-action="close-sheet">Cancel</button><button type="button" class="btn primary" data-action="imp-go" id="impgo">Import</button>`);
+    csvCount();
+  };
+  r.readAsText(file);
+}
+function csvCount() { const n = document.querySelectorAll(".impck:checked").length, b = $("#impgo"); if (b) { b.textContent = `Import ${n} ${n === 1 ? "game" : "games"}`; b.disabled = !n; } }
+function csvGo() {
+  const fm = ($("#imp_fmt") || {}).value || "", picks = [...document.querySelectorAll(".impck:checked")].map(c => ({ x: impRows[+c.dataset.r], p: c.dataset.p })).filter(o => o.x);
+  if (!picks.length) return;
+  const by = S.user.displayName || PEOPLE[me()] || "", now = Date.now();
+  picks.forEach(({ x, p }, n) => {
+    const g = { title: x.title, platform: p, year: null, publisher: "", genres: [], cover: "", subscription: false, subName: "", notes: "", ownedBy: [me()], rawgId: null, addedBy: me(), addedByName: by, addedAt: now + n };
+    const f = x.format || fm; if (f) g.format = f;
+    addDoc(collection(db, "games"), g).catch(e => showErr("Import failed: " + e.message));
+  });
+  closeSheet(); toast(`${picks.length} ${picks.length === 1 ? "game" : "games"} imported`);
+  const want = picks.length; const had = S.games.length;
+  if (!S.rawgKey) { setStatus("autoStatus", "Imported. Add the RAWG key under Advanced, then tap Match games with RAWG to fill in year, publisher, genres and covers."); return; }
+  (async () => { for (let i = 0; i < 40 && S.games.length < had + want; i++) await sleep(250); autoMatch("match"); })();
+}
 let restoreData = null;
 function restoreRead(file) {
   const r = new FileReader();
@@ -1360,6 +1442,7 @@ function settingsHtml() {
 <p style="margin-top:10px">The backup saves all games, profile and owned consoles to a file on this device. If something looks old, close and reopen the app once.</p></div>
 <div class="set"><h3>Physical or digital</h3><p id="fmtInfo">${fmtInfoText()}</p><div class="btns"><button type="button" class="btn sm primary" data-action="open-bulk-format">Set format on existing games</button></div></div>
 <div class="set"><h3>Game database tools</h3><p>Automatic tools only fill empty fields and never change what you edited. Only exact title matches are used. They need the RAWG key under Advanced.</p>
+<p>Import a list of games from a CSV file. You choose which ones to add and on which platform.</p><div class="btns" style="margin-bottom:10px"><button type="button" class="btn sm primary" data-action="csv-pick">Import games from CSV</button><input type="file" id="csvin" accept=".csv,text/csv" hidden></div>
 <div class="btns"><button type="button" class="btn sm" data-action="auto-covers">Assign covers automatically</button><button type="button" class="btn sm" data-action="auto-match">Match games with RAWG</button><button type="button" class="btn sm ghost" data-action="stop-auto">Stop</button></div>
 <p id="autoStatus" style="margin-top:8px"></p></div>
 <div class="set"><h3>About</h3><p>Game data and images from <a href="https://rawg.io" target="_blank" rel="noopener">RAWG</a>.</p></div>
@@ -1528,14 +1611,16 @@ document.addEventListener("input", e => {
   const id = e.target && e.target.id;
   if (id === "q") { S.q = e.target.value; clearTimeout(searchTimer); searchTimer = setTimeout(updateLibrary, 120); }
   else if (id === "addq") { clearTimeout(addTimer); const v = e.target.value.trim(); if (v.length >= 3) addTimer = setTimeout(doSearch, 700); }
-  else if (id === "f_title" && S.add) { S.add.dupOk = false; const b = $("#saveBtn"); if (b) b.textContent = S.add.editId ? "Save changes" : "Save to library"; }
+  else if (id === "f_title" && S.add) { S.add.dupOk = false; S.add.copyOk = false; const b = $("#saveBtn"); if (b) b.textContent = S.add.editId ? "Save changes" : "Save to library"; }
 });
 document.addEventListener("change", e => {
   const id = e.target && e.target.id;
+  if (id === "csvin") { const f = e.target.files && e.target.files[0]; if (f) csvRead(f); e.target.value = ""; }
+  if (e.target && e.target.classList && e.target.classList.contains("impck")) csvCount();
   if (id === "restorein") { const f = e.target.files && e.target.files[0]; if (f) restoreRead(f); e.target.value = ""; }
   if (id === "photoin") { const f = e.target.files && e.target.files[0]; if (f) handlePhoto(f, e.target.dataset.purpose); }
   if (id === "f_sub") { const r = $("#subrow"); if (r) r.hidden = !e.target.checked; }
-  if (id === "f_platform" && S.add) { S.add.dupOk = false; const b = $("#saveBtn"); if (b) b.textContent = S.add.editId ? "Save changes" : "Save to library"; formMsg(""); }
+  if (id === "f_platform" && S.add) { S.add.dupOk = false; S.add.copyOk = false; const b = $("#saveBtn"); if (b) b.textContent = S.add.editId ? "Save changes" : "Save to library"; formMsg(""); }
 });
 
 function act(name, el) {
@@ -1544,7 +1629,7 @@ function act(name, el) {
     case "signout": return signOut(auth).catch(e => showErr(e.message));
     case "close-sheet": return closeSheet();
     case "open-add": return openAdd();
-    case "add-mode": { const a = S.add; if (!a) return; if (a.mode === "form" && $("#f_title")) a.draft = { ...(a.draft || {}), ...readForm() }; a.mode = el.dataset.v; a.dupOk = false; paintAdd(); return; }
+    case "add-mode": { const a = S.add; if (!a) return; if (a.mode === "form" && $("#f_title")) a.draft = { ...(a.draft || {}), ...readForm() }; a.mode = el.dataset.v; a.dupOk = false; a.copyOk = false; paintAdd(); return; }
     case "scan-barcode": return window.BarcodeDetector && navigator.mediaDevices ? startLive() : pickPhoto("barcode");
     case "scan-cover": return pickPhoto("cover");
     case "stop-scan": stopScan(); return scanMsg("");
@@ -1583,6 +1668,11 @@ function act(name, el) {
     case "auto-match": return autoMatch("match");
     case "stop-auto": if (S.auto) S.auto.stop = true; return;
     case "export": return exportJson();
+    case "copy-open": { const id = el.dataset.id; closeSheet(); return openGame(id); }
+    case "copy-new": { if (S.add) S.add.copyOk = true; formMsg(""); return saveGame(); }
+    case "csv-pick": { const i = $("#csvin"); if (i) i.click(); return; }
+    case "imp-go": return csvGo();
+    case "imp-none": document.querySelectorAll(".impck").forEach(x => { x.checked = false; }); return csvCount();
     case "restore-pick": { const i = $("#restorein"); if (i) i.click(); return; }
     case "restore-go": return restoreGo();
     case "open-bulk-format": return openBulkFormat();
