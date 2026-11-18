@@ -21,8 +21,16 @@ UPDATING
 SETTINGS
   Sync across devices: status, Sync now, Export JSON backup, Restore from backup, Sign out.
   Physical or digital: set the format on existing games in bulk.
-  Game database tools: Import games from CSV, assign covers, match with RAWG.
+  Game database tools: Import games from CSV, assign covers, match with RAWG,
+  fill gaps from Wikidata.
   Advanced (collapsed): RAWG key, barcode helper address, Account ID.
+
+GAME INFORMATION SOURCES
+  RAWG (needs your key): year, publisher, genres and covers, exact title matches only.
+  Wikidata (free, no key): year, publisher and genres only. Never covers: Wikipedia cover art
+  is non-free. Only empty fields are filled. If a name matches more than one game and the
+  platform does not settle it, the game is skipped.
+  After a CSV import both run automatically (RAWG first when a key is saved).
 
 CSV IMPORT
   Columns: title, platform, format, region, last_played, check. Only title and platform are
@@ -44,3 +52,4 @@ VERSION HISTORY
   9   App name and cover subtitle change with the theme. Physical or digital format,
       bulk setter, filter, backup and restore.
   10  CSV import with platform questions, "Found a copy" when adding, RAWG fill after import.
+  11  Fill gaps from Wikidata (year, publisher, genres), also runs after a CSV import.

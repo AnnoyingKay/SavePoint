@@ -1403,8 +1403,12 @@ function csvGo() {
   });
   closeSheet(); toast(`${picks.length} ${picks.length === 1 ? "game" : "games"} imported`);
   const want = picks.length; const had = S.games.length;
-  if (!S.rawgKey) { setStatus("autoStatus", "Imported. Add the RAWG key under Advanced, then tap Match games with RAWG to fill in year, publisher, genres and covers."); return; }
-  (async () => { for (let i = 0; i < 40 && S.games.length < had + want; i++) await sleep(250); autoMatch("match"); })();
+  (async () => {
+    for (let i = 0; i < 40 && S.games.length < had + want; i++) await sleep(250);
+    if (S.rawgKey) await autoMatch("match");
+    await wikiFill();
+    if (!S.rawgKey) setStatus("autoStatus", ($("#autoStatus") ? $("#autoStatus").textContent : "") + " Add the RAWG key under Advanced and tap Match games with RAWG to get covers.");
+  })();
 }
 let restoreData = null;
 function restoreRead(file) {
@@ -1443,7 +1447,7 @@ function settingsHtml() {
 <div class="set"><h3>Physical or digital</h3><p id="fmtInfo">${fmtInfoText()}</p><div class="btns"><button type="button" class="btn sm primary" data-action="open-bulk-format">Set format on existing games</button></div></div>
 <div class="set"><h3>Game database tools</h3><p>Automatic tools only fill empty fields and never change what you edited. Only exact title matches are used. They need the RAWG key under Advanced.</p>
 <p>Import a list of games from a CSV file. You choose which ones to add and on which platform.</p><div class="btns" style="margin-bottom:10px"><button type="button" class="btn sm primary" data-action="csv-pick">Import games from CSV</button><input type="file" id="csvin" accept=".csv,text/csv" hidden></div>
-<div class="btns"><button type="button" class="btn sm" data-action="auto-covers">Assign covers automatically</button><button type="button" class="btn sm" data-action="auto-match">Match games with RAWG</button><button type="button" class="btn sm ghost" data-action="stop-auto">Stop</button></div>
+<div class="btns"><button type="button" class="btn sm" data-action="auto-covers">Assign covers automatically</button><button type="button" class="btn sm" data-action="auto-match">Match games with RAWG</button><button type="button" class="btn sm" data-action="auto-wiki">Fill gaps from Wikidata</button><button type="button" class="btn sm ghost" data-action="stop-auto">Stop</button></div>
 <p id="autoStatus" style="margin-top:8px"></p></div>
 <div class="set"><h3>About</h3><p>Game data and images from <a href="https://rawg.io" target="_blank" rel="noopener">RAWG</a>.</p></div>
 <details class="set adv" id="adv"${S.advOpen ? " open" : ""}><summary>Advanced</summary>
@@ -1521,6 +1525,68 @@ async function autoMatch(mode) {
   }
   S.auto = null;
   setStatus("autoStatus", `Done${stopped}: ${upd} updated, ${miss} left as they were (no exact match or nothing to add).`);
+}
+/* ----- Wikidata: fills only empty year, publisher and genres. No key, no covers. ----- */
+const WD_PLAT = { ps1: "Q10677", ps2: "Q10680", ps3: "Q10683", ps4: "Q5014725", ps5: "Q63184502", vita: "Q188808", x360: "Q48263", xone: "Q13361286", xseries: "Q98973368", wii: "Q8079", wiiu: "Q56942", switch: "Q19610114", "3ds": "Q203597", ds: "Q170323", gc: "Q10684", xbox: "Q132020", steam: "Q1406", pcother: "Q1406" };
+const wdLabels = {};
+async function wd(params) {
+  const r = await fetch("https://www.wikidata.org/w/api.php?" + new URLSearchParams({ ...params, format: "json", origin: "*" }));
+  if (!r.ok) { const e = new Error("wikidata " + r.status); e.status = r.status; throw e; }
+  return r.json();
+}
+const wdIds = (ent, prop) => ((ent.claims || {})[prop] || []).map(c => c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value && c.mainsnak.datavalue.value.id).filter(Boolean);
+async function wdLabel(ids) {
+  const need = uniq(ids).filter(i => !(i in wdLabels));
+  if (need.length) {
+    const j = await wd({ action: "wbgetentities", ids: need.join("|"), props: "labels", languages: "en" });
+    need.forEach(i => { const l = j.entities && j.entities[i] && j.entities[i].labels && j.entities[i].labels.en; wdLabels[i] = l ? l.value : ""; });
+  }
+  return ids.map(i => wdLabels[i]).filter(Boolean);
+}
+async function wdLookup(g) {
+  const sr = await wd({ action: "wbsearchentities", search: g.title, language: "en", type: "item", limit: 10 });
+  const ids = (sr.search || []).filter(x => norm(x.label) === g.titleKey).map(x => x.id);
+  if (!ids.length) return { status: "none" };
+  const ej = await wd({ action: "wbgetentities", ids: ids.join("|"), props: "claims|descriptions", languages: "en" });
+  const cands = ids.map(i => ej.entities && ej.entities[i]).filter(e => e && (wdIds(e, "P400").length || /video ?game/i.test(((e.descriptions || {}).en || {}).value || "")));
+  if (!cands.length) return { status: "none" };
+  const hasPlat = e => wdIds(e, "P400").includes(WD_PLAT[g.platform]);
+  const withPlat = cands.filter(hasPlat);
+  const pick = withPlat.length === 1 ? withPlat[0] : (!withPlat.length && cands.length === 1 ? cands[0] : null);
+  if (!pick) return { status: "ambiguous" };
+  const years = ((pick.claims || {}).P577 || []).map(c => { const t = c.mainsnak && c.mainsnak.datavalue && c.mainsnak.datavalue.value && c.mainsnak.datavalue.value.time; const m = t && /^[+-]?(\d{4})/.exec(t); return m ? +m[1] : 0; }).filter(Boolean);
+  const out = {};
+  if (years.length) out.year = Math.min(...years);
+  const pubs = await wdLabel(wdIds(pick, "P123").slice(0, 2)); if (pubs.length) out.publisher = pubs.join(", ");
+  const gen = await wdLabel(wdIds(pick, "P136").slice(0, 3)); if (gen.length) out.genres = gen.map(x => x.charAt(0).toUpperCase() + x.slice(1));
+  return { status: "ok", out };
+}
+async function wikiFill() {
+  if (S.auto && S.auto.run) return setStatus("autoStatus", "Already running.");
+  const list = S.games.filter(g => !g.year || !g.publisher || !(g.genres || []).length);
+  if (!list.length) return setStatus("autoStatus", "Nothing to fill in.");
+  S.auto = { run: true, stop: false };
+  let done = 0, upd = 0, none = 0, amb = 0, stopped = "";
+  for (const g of list) {
+    if (S.auto.stop) { stopped = " (stopped)"; break; }
+    try {
+      const r = await wdLookup(g);
+      if (r.status === "ambiguous") amb++;
+      else if (r.status === "ok") {
+        const patch = {};
+        if (!g.year && r.out.year) patch.year = r.out.year;
+        if (!g.publisher && r.out.publisher) patch.publisher = r.out.publisher;
+        if (!(g.genres || []).length && r.out.genres) patch.genres = r.out.genres;
+        if (Object.keys(patch).length) { updateDoc(doc(db, "games", g.id), patch).catch(e => showErr("Update failed: " + e.message)); upd++; } else none++;
+      } else none++;
+    } catch (e) {
+      if (e.status === 429 || e.status === 403) { setStatus("autoStatus", "Wikidata asked us to slow down. Try again in a few minutes."); S.auto = null; return; }
+      none++;
+    }
+    done++; setStatus("autoStatus", `Wikidata: ${done} of ${list.length} checked…`); await sleep(250);
+  }
+  S.auto = null;
+  setStatus("autoStatus", `Wikidata done${stopped}: ${upd} updated, ${amb} skipped because more than one game had that name, ${none} not found or nothing to add.`);
 }
 function exportJson() {
   const data = { app: "SavePoint", version: S.version, exportedAt: new Date().toISOString(), games: S.games.map(g => { const { _h, titleKey, ...rest } = g; return { ...rest, ownedBy: ownersOf(g), addedBy: g.addedBy || null, format: fmtOf(g) || null }; }), members: S.members, consolesOwned: S.owned, consoleCounts: Object.fromEntries(PLATFORMS.filter(p => consoleCount(p.k) > 0).map(p => [p.k, consoleCount(p.k)])) };
@@ -1666,6 +1732,7 @@ function act(name, el) {
     case "test-key": return testKey();
     case "auto-covers": return autoMatch("covers");
     case "auto-match": return autoMatch("match");
+    case "auto-wiki": return wikiFill();
     case "stop-auto": if (S.auto) S.auto.stop = true; return;
     case "export": return exportJson();
     case "copy-open": { const id = el.dataset.id; closeSheet(); return openGame(id); }
